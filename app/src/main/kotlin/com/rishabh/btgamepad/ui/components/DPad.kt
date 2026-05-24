@@ -15,20 +15,22 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
 import com.rishabh.btgamepad.hid.HidConstants
 
-/** 4-directional D-pad that supports diagonals via simultaneous presses. */
 @Composable
 fun DPad(
     onDirectionChange: (Byte) -> Unit,
+    scale: Float = 1f,
     modifier: Modifier = Modifier
 ) {
-    val btnSize = 44.dp
-    var up by remember { mutableStateOf(false) }
-    var down by remember { mutableStateOf(false) }
-    var left by remember { mutableStateOf(false) }
+    val btnSize = (44 * scale).dp
+    var up    by remember { mutableStateOf(false) }
+    var down  by remember { mutableStateOf(false) }
+    var left  by remember { mutableStateOf(false) }
     var right by remember { mutableStateOf(false) }
 
     fun recompute() {
@@ -47,13 +49,13 @@ fun DPad(
     }
 
     Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        DPadKey("▲", btnSize, { up = true; recompute() }, { up = false; recompute() })
+        DPadKey("▲", btnSize, { up = true; recompute() },    { up = false; recompute() })
         Row {
-            DPadKey("◀", btnSize, { left = true; recompute() }, { left = false; recompute() })
+            DPadKey("◀", btnSize, { left = true; recompute() },  { left = false; recompute() })
             Spacer(Modifier.size(btnSize))
             DPadKey("▶", btnSize, { right = true; recompute() }, { right = false; recompute() })
         }
-        DPadKey("▼", btnSize, { down = true; recompute() }, { down = false; recompute() })
+        DPadKey("▼", btnSize, { down = true; recompute() },  { down = false; recompute() })
     }
 }
 
@@ -64,6 +66,7 @@ private fun DPadKey(
     onPress: () -> Unit,
     onRelease: () -> Unit
 ) {
+    val haptic = LocalHapticFeedback.current
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier
@@ -73,7 +76,12 @@ private fun DPadKey(
                 awaitPointerEventScope {
                     while (true) {
                         val event = awaitPointerEvent()
-                        if (event.changes.any { it.pressed }) onPress() else onRelease()
+                        if (event.changes.any { it.pressed }) {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onPress()
+                        } else {
+                            onRelease()
+                        }
                         event.changes.forEach { it.consume() }
                     }
                 }

@@ -16,24 +16,25 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import kotlin.math.sqrt
 
-/**
- * Circular drag-gesture joystick. Reports normalized [-1, 1] x/y on every move.
- * Thumb snaps to center on finger lift, sending a (0, 0) report.
- */
 @Composable
 fun AnalogStick(
     label: String,
+    scale: Float = 1f,
     onMove: (x: Float, y: Float) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val baseRadius = 56.dp
-    val thumbRadius = 20.dp
+    val baseRadius = (56 * scale).dp
+    val thumbRadius = (20 * scale).dp
     var thumbOffset by remember { mutableStateOf(Offset.Zero) }
+    val haptic = LocalHapticFeedback.current
+    var wasDragging by remember { mutableStateOf(false) }
 
     Box(
         modifier = modifier
@@ -42,7 +43,12 @@ fun AnalogStick(
             .pointerInput(Unit) {
                 val maxPx = baseRadius.toPx() - thumbRadius.toPx()
                 detectDragGestures(
+                    onDragStart = {
+                        wasDragging = true
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    },
                     onDragEnd = {
+                        wasDragging = false
                         thumbOffset = Offset.Zero
                         onMove(0f, 0f)
                     },

@@ -12,7 +12,10 @@ import android.bluetooth.BluetoothHidDevice
 import android.bluetooth.BluetoothHidDeviceAppQosSettings
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.os.Binder
 import android.os.Handler
 import android.os.IBinder
@@ -24,7 +27,7 @@ import java.util.concurrent.Executors
 
 class BluetoothHidService : Service() {
 
-    enum class State { IDLE, REGISTERING, WAITING_FOR_HOST, CONNECTED, ERROR }
+    enum class State { IDLE, BLUETOOTH_OFF, REGISTERING, WAITING_FOR_HOST, CONNECTED, ERROR }
 
     inner class LocalBinder : Binder() {
         fun getService(): BluetoothHidService = this@BluetoothHidService
@@ -43,6 +46,16 @@ class BluetoothHidService : Service() {
             field = value
             mainHandler.post { onStateChanged?.invoke(value) }
         }
+
+    // Auto-retry when Bluetooth turns ON
+    private val btStateReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            val state = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR)
+            if (state == BluetoothAdapter.STATE_ON && currentState == State.BLUETOOTH_OFF) {
+                mainHandler.postDelayed({ registerHidProfile() }, 1000)
+            }
+        }
+    }
 
     private val hidCallback = object : BluetoothHidDevice.Callback() {
 
@@ -84,13 +97,15 @@ class BluetoothHidService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        startForeground(NOTIFICATION_ID, buildNotification("Waiting for connection…"))
+        startForeground(NOTIFICATION_ID, buildNotification("Starting…"))
+        registerReceiver(btStateReceiver, IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED))
         registerHidProfile()
     }
 
     override fun onBind(intent: Intent?): IBinder = binder
 
     override fun onDestroy() {
+        unregisterReceiver(btStateReceiver)
         hidDevice?.unregisterApp()
         val btManager = getSystemService(BluetoothManager::class.java)
         btManager.adapter?.closeProfileProxy(BluetoothProfile.HID_DEVICE, hidDevice)
@@ -99,11 +114,15 @@ class BluetoothHidService : Service() {
 
     @SuppressLint("MissingPermission")
     private fun registerHidProfile() {
-        currentState = State.REGISTERING
         val adapter: BluetoothAdapter =
             getSystemService(BluetoothManager::class.java).adapter ?: run {
                 currentState = State.ERROR; return
             }
+        if (!adapter.isEnabled) {
+            currentState = State.BLUETOOTH_OFF
+            return
+        }
+        currentState = State.REGISTERING
         adapter.getProfileProxy(this, object : BluetoothProfile.ServiceListener {
             override fun onServiceConnected(profile: Int, proxy: BluetoothProfile) {
                 hidDevice = proxy as BluetoothHidDevice
@@ -120,18 +139,12 @@ class BluetoothHidService : Service() {
     private fun registerApp() {
         val qos = BluetoothHidDeviceAppQosSettings(
             BluetoothHidDeviceAppQosSettings.SERVICE_BEST_EFFORT,
-            800,
-            9,
-            0,
-            11250,
+            800, 9, 0, 11250,
             BluetoothHidDeviceAppQosSettings.MAX
         )
         hidDevice?.registerApp(
             GamepadHidDescriptor.buildSdpSettings(),
-            null,
-            qos,
-            executor,
-            hidCallback
+            null, qos, executor, hidCallback
         )
     }
 
@@ -151,6 +164,11 @@ class BluetoothHidService : Service() {
 
     fun getReportBuilder(): HidReportBuilder = reportBuilder
 
+    fun retry() {
+        hidDevice?.unregisterApp()
+        registerHidProfile()
+    }
+
     private fun buildNotification(text: String): Notification {
         val channelId = "bt_gamepad"
         val nm = getSystemService(NotificationManager::class.java)
@@ -158,9 +176,7 @@ class BluetoothHidService : Service() {
             NotificationChannel(channelId, "BT Gamepad", NotificationManager.IMPORTANCE_LOW)
         )
         val pi = PendingIntent.getActivity(
-            this, 0,
-            Intent(this, MainActivity::class.java),
-            PendingIntent.FLAG_IMMUTABLE
+            this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE
         )
         return NotificationCompat.Builder(this, channelId)
             .setContentTitle("BT Gamepad")
