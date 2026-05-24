@@ -93,7 +93,7 @@ object GamepadHidDescriptor {
             "Android Gamepad",
             "Virtual Gamepad via BluetoothHidDevice",
             "Rishabh",
-            BluetoothHidDevice.SUBCLASS1_GAMEPAD,
+            BluetoothHidDevice.SUBCLASS2_GAMEPAD,
             DESCRIPTOR
         )
 }
