@@ -13,24 +13,23 @@ object BluetoothPermissionHandler {
 
     fun requiredPermissions(): Array<String> =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            // Android 12+: BLUETOOTH_CONNECT for HID profile API, BLUETOOTH_ADVERTISE for discoverability
             arrayOf(
                 Manifest.permission.BLUETOOTH_CONNECT,
-                Manifest.permission.BLUETOOTH_ADVERTISE,
-                Manifest.permission.BLUETOOTH_SCAN
+                Manifest.permission.BLUETOOTH_ADVERTISE
             )
         } else {
-            @Suppress("DEPRECATION")
-            arrayOf(
-                Manifest.permission.BLUETOOTH,
-                Manifest.permission.BLUETOOTH_ADMIN,
-                Manifest.permission.ACCESS_FINE_LOCATION
-            )
+            // Android 9-11: BLUETOOTH / BLUETOOTH_ADMIN are normal permissions (auto-granted at install).
+            // ACCESS_FINE_LOCATION is NOT needed for the HID device role (no scanning).
+            emptyArray()
         }
 
-    fun allGranted(activity: Activity): Boolean =
-        requiredPermissions().all { perm ->
+    fun allGranted(activity: Activity): Boolean {
+        val perms = requiredPermissions()
+        return perms.isEmpty() || perms.all { perm ->
             ContextCompat.checkSelfPermission(activity, perm) == PackageManager.PERMISSION_GRANTED
         }
+    }
 
     fun createLauncher(
         activity: ComponentActivity,
@@ -39,6 +38,6 @@ object BluetoothPermissionHandler {
         activity.registerForActivityResult(
             ActivityResultContracts.RequestMultiplePermissions()
         ) { results ->
-            onResult(results.values.all { it })
+            onResult(results.isEmpty() || results.values.all { it })
         }
 }

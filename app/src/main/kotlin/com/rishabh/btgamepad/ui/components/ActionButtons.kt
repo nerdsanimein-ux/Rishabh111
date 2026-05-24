@@ -30,7 +30,7 @@ private val CLR_PINK   = Color(0xFFFF4081)
 @Composable
 fun ActionButtons(
     layout: LayoutMode,
-    scale: Float,
+    scale: Float = 1f,
     onA: (Boolean) -> Unit,
     onB: (Boolean) -> Unit,
     onX: (Boolean) -> Unit,

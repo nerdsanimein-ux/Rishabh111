@@ -16,7 +16,9 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.PackageManager
 import android.os.Binder
+import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
@@ -47,15 +49,14 @@ class BluetoothHidService : Service() {
             mainHandler.post { onStateChanged?.invoke(value) }
         }
 
-    // Timeout: if still REGISTERING after 12s, transition to ERROR
+    // If the HID profile proxy never responds within 12s, give up with ERROR
     private val registrationTimeoutRunnable = Runnable {
         if (currentState == State.REGISTERING) currentState = State.ERROR
     }
 
     private val btStateReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
-            val state = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR)
-            when (state) {
+            when (intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR)) {
                 BluetoothAdapter.STATE_ON -> {
                     if (currentState == State.BLUETOOTH_OFF || currentState == State.ERROR)
                         mainHandler.postDelayed({ registerHidProfile() }, 1000)
@@ -84,22 +85,19 @@ class BluetoothHidService : Service() {
         override fun onConnectionStateChanged(device: BluetoothDevice, state: Int) {
             when (state) {
                 BluetoothProfile.STATE_CONNECTED -> {
-                    connectedHost = device
-                    currentState = State.CONNECTED
+                    connectedHost = device; currentState = State.CONNECTED
                 }
                 BluetoothProfile.STATE_DISCONNECTED -> {
-                    connectedHost = null
-                    currentState = State.WAITING_FOR_HOST
+                    connectedHost = null; currentState = State.WAITING_FOR_HOST
                 }
             }
         }
 
         override fun onGetReport(device: BluetoothDevice, type: Byte, id: Byte, bufferSize: Int) {
-            if (id == HidConstants.REPORT_ID) {
+            if (id == HidConstants.REPORT_ID)
                 hidDevice?.replyReport(device, type, id, reportBuilder.toReport())
-            } else {
+            else
                 hidDevice?.reportError(device, BluetoothHidDevice.ERROR_RSP_INVALID_RPT_ID)
-            }
         }
 
         override fun onSetReport(device: BluetoothDevice, type: Byte, id: Byte, data: ByteArray) {
@@ -120,33 +118,52 @@ class BluetoothHidService : Service() {
         mainHandler.removeCallbacks(registrationTimeoutRunnable)
         unregisterReceiver(btStateReceiver)
         hidDevice?.unregisterApp()
-        val btManager = getSystemService(BluetoothManager::class.java)
-        btManager.adapter?.closeProfileProxy(BluetoothProfile.HID_DEVICE, hidDevice)
+        getSystemService(BluetoothManager::class.java)
+            .adapter?.closeProfileProxy(BluetoothProfile.HID_DEVICE, hidDevice)
         super.onDestroy()
     }
 
     @SuppressLint("MissingPermission")
     private fun registerHidProfile() {
-        val adapter: BluetoothAdapter =
-            getSystemService(BluetoothManager::class.java).adapter ?: run {
-                currentState = State.ERROR; return
-            }
-        if (!adapter.isEnabled) {
-            currentState = State.BLUETOOTH_OFF
+        // Explicit permission guard — getProfileProxy() is silent on permission errors
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+            checkSelfPermission(android.Manifest.permission.BLUETOOTH_CONNECT)
+                != PackageManager.PERMISSION_GRANTED
+        ) {
+            currentState = State.ERROR
             return
         }
+
+        val adapter = getSystemService(BluetoothManager::class.java).adapter ?: run {
+            currentState = State.ERROR; return
+        }
+        if (!adapter.isEnabled) {
+            currentState = State.BLUETOOTH_OFF; return
+        }
+
         currentState = State.REGISTERING
         mainHandler.postDelayed(registrationTimeoutRunnable, 12_000)
-        adapter.getProfileProxy(this, object : BluetoothProfile.ServiceListener {
-            override fun onServiceConnected(profile: Int, proxy: BluetoothProfile) {
-                hidDevice = proxy as BluetoothHidDevice
-                registerApp()
-            }
-            override fun onServiceDisconnected(profile: Int) {
-                hidDevice = null
-                currentState = State.IDLE
-            }
-        }, BluetoothProfile.HID_DEVICE)
+
+        val requested = adapter.getProfileProxy(
+            this,
+            object : BluetoothProfile.ServiceListener {
+                override fun onServiceConnected(profile: Int, proxy: BluetoothProfile) {
+                    hidDevice = proxy as BluetoothHidDevice
+                    registerApp()
+                }
+                override fun onServiceDisconnected(profile: Int) {
+                    hidDevice = null
+                    if (currentState != State.BLUETOOTH_OFF) currentState = State.IDLE
+                }
+            },
+            BluetoothProfile.HID_DEVICE
+        )
+
+        // getProfileProxy returns false if the profile isn't available on this device
+        if (!requested) {
+            mainHandler.removeCallbacks(registrationTimeoutRunnable)
+            currentState = State.ERROR
+        }
     }
 
     @SuppressLint("MissingPermission")
@@ -156,24 +173,21 @@ class BluetoothHidService : Service() {
             800, 9, 0, 11250,
             BluetoothHidDeviceAppQosSettings.MAX
         )
-        hidDevice?.registerApp(
-            GamepadHidDescriptor.buildSdpSettings(),
-            null, qos, executor, hidCallback
-        )
+        hidDevice?.registerApp(GamepadHidDescriptor.buildSdpSettings(), null, qos, executor, hidCallback)
     }
 
     private fun requestDiscoverable() {
-        val intent = Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE).apply {
-            putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, 300)
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
-        startActivity(intent)
+        startActivity(
+            Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE).apply {
+                putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, 300)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+        )
     }
 
     @SuppressLint("MissingPermission")
     fun sendReport(report: ByteArray) {
-        val host = connectedHost ?: return
-        hidDevice?.sendReport(host, HidConstants.REPORT_ID.toInt(), report)
+        hidDevice?.sendReport(connectedHost ?: return, HidConstants.REPORT_ID.toInt(), report)
     }
 
     fun getReportBuilder(): HidReportBuilder = reportBuilder
@@ -186,24 +200,19 @@ class BluetoothHidService : Service() {
     }
 
     private fun buildNotification(text: String): Notification {
-        val channelId = "bt_gamepad"
-        val nm = getSystemService(NotificationManager::class.java)
-        nm.createNotificationChannel(
-            NotificationChannel(channelId, "BT Gamepad", NotificationManager.IMPORTANCE_LOW)
-        )
-        val pi = PendingIntent.getActivity(
-            this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE
-        )
-        return NotificationCompat.Builder(this, channelId)
+        val ch = "bt_gamepad"
+        getSystemService(NotificationManager::class.java)
+            .createNotificationChannel(NotificationChannel(ch, "BT Gamepad", NotificationManager.IMPORTANCE_LOW))
+        return NotificationCompat.Builder(this, ch)
             .setContentTitle("BT Gamepad")
             .setContentText(text)
             .setSmallIcon(R.drawable.ic_gamepad)
-            .setContentIntent(pi)
+            .setContentIntent(
+                PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
+            )
             .setOngoing(true)
             .build()
     }
 
-    companion object {
-        private const val NOTIFICATION_ID = 1001
-    }
+    companion object { private const val NOTIFICATION_ID = 1001 }
 }
