@@ -4,10 +4,10 @@ import android.Manifest
 import android.app.Activity
 import android.content.pm.PackageManager
 import android.os.Build
+import androidx.activity.ComponentActivity
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
-import androidx.fragment.app.FragmentActivity
 
 object BluetoothPermissionHandler {
 
@@ -33,7 +33,7 @@ object BluetoothPermissionHandler {
         }
 
     fun createLauncher(
-        activity: FragmentActivity,
+        activity: ComponentActivity,
         onResult: (allGranted: Boolean) -> Unit
     ): ActivityResultLauncher<Array<String>> =
         activity.registerForActivityResult(
