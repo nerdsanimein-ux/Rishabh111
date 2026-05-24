@@ -24,36 +24,30 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.math.sqrt
 
-private val COLOR_BASE  = Color(0xFF1A2035)
-private val COLOR_THUMB = Color(0xFF3D5AFE) // vivid indigo thumb
+private val COLOR_BASE  = Color(0xFF242424)
+private val COLOR_THUMB = Color(0xFF4A4A4A)
 
 @Composable
 fun AnalogStick(
     label: String,
-    scale: Float = 1f,
     onMove: (x: Float, y: Float) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val baseRadius  = (62 * scale).dp   // diameter = 124dp at scale=1
-    val thumbRadius = (22 * scale).dp
+    val baseD   = 130.dp
+    val thumbD  = 56.dp
     var thumbOffset by remember { mutableStateOf(Offset.Zero) }
     val haptic = LocalHapticFeedback.current
 
     Box(
         modifier = modifier
-            .size(baseRadius * 2)
+            .size(baseD)
             .background(COLOR_BASE, CircleShape)
             .pointerInput(Unit) {
-                val maxPx = baseRadius.toPx() - thumbRadius.toPx()
+                val maxPx = (baseD / 2 - thumbD / 2).toPx()
                 detectDragGestures(
-                    onDragStart = {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                    },
-                    onDragEnd = {
-                        thumbOffset = Offset.Zero
-                        onMove(0f, 0f)
-                    },
-                    onDrag = { change, dragAmount ->
+                    onDragStart = { haptic.performHapticFeedback(HapticFeedbackType.LongPress) },
+                    onDragEnd   = { thumbOffset = Offset.Zero; onMove(0f, 0f) },
+                    onDrag      = { change, dragAmount ->
                         change.consume()
                         val raw = thumbOffset + dragAmount
                         val mag = sqrt(raw.x * raw.x + raw.y * raw.y)
@@ -67,10 +61,10 @@ fun AnalogStick(
     ) {
         Box(
             modifier = Modifier
-                .size(thumbRadius * 2)
+                .size(thumbD)
                 .offset { IntOffset(thumbOffset.x.toInt(), thumbOffset.y.toInt()) }
                 .background(COLOR_THUMB, CircleShape)
         )
-        Text(label, color = Color(0x88FFFFFF), fontSize = (11 * scale).sp)
+        Text(label, color = Color(0xFF666666), fontSize = 13.sp)
     }
 }

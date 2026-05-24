@@ -19,46 +19,39 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.rishabh.btgamepad.ui.LayoutMode
 
-// Xbox: A=green B=red X=blue Y=yellow
-// PlayStation: ×=blue ○=red □=pink △=green
-private val CLR_GREEN  = Color(0xFF00E676)
-private val CLR_RED    = Color(0xFFFF1744)
-private val CLR_BLUE   = Color(0xFF2979FF)
-private val CLR_YELLOW = Color(0xFFFFD600)
-private val CLR_PINK   = Color(0xFFFF4081)
+private val BTN_COLOR = Color(0xFF3A3A3A)
+private val LBL_COLOR = Color(0xFF999999)
 
 @Composable
 fun ActionButtons(
     layout: LayoutMode,
-    scale: Float = 1f,
     onA: (Boolean) -> Unit,
     onB: (Boolean) -> Unit,
     onX: (Boolean) -> Unit,
     onY: (Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val btnSize = (52 * scale).dp   // cross = 156dp at scale=1
+    val btnSize = 68.dp
 
-    val (topLabel, topColor)   = if (layout == LayoutMode.XBOX) "Y" to CLR_YELLOW else "△" to CLR_GREEN
-    val (leftLabel, leftColor) = if (layout == LayoutMode.XBOX) "X" to CLR_BLUE   else "□" to CLR_PINK
-    val (rightLabel, rightColor) = if (layout == LayoutMode.XBOX) "B" to CLR_RED  else "○" to CLR_RED
-    val (botLabel, botColor)   = if (layout == LayoutMode.XBOX) "A" to CLR_GREEN  else "×" to CLR_BLUE
+    val topLabel   = if (layout == LayoutMode.XBOX) "Y" else "△"
+    val leftLabel  = if (layout == LayoutMode.XBOX) "X" else "□"
+    val rightLabel = if (layout == LayoutMode.XBOX) "B" else "○"
+    val botLabel   = if (layout == LayoutMode.XBOX) "A" else "×"
 
     Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        FaceButton(topLabel, topColor, btnSize, onY)
+        FaceButton(topLabel, btnSize, onY)
         Row(verticalAlignment = Alignment.CenterVertically) {
-            FaceButton(leftLabel, leftColor, btnSize, onX)
+            FaceButton(leftLabel, btnSize, onX)
             Spacer(Modifier.size(btnSize))
-            FaceButton(rightLabel, rightColor, btnSize, onB)
+            FaceButton(rightLabel, btnSize, onB)
         }
-        FaceButton(botLabel, botColor, btnSize, onA)
+        FaceButton(botLabel, btnSize, onA)
     }
 }
 
 @Composable
 private fun FaceButton(
     label: String,
-    color: Color,
     size: androidx.compose.ui.unit.Dp,
     onPressedChanged: (Boolean) -> Unit
 ) {
@@ -67,7 +60,7 @@ private fun FaceButton(
         contentAlignment = Alignment.Center,
         modifier = Modifier
             .size(size)
-            .background(color, CircleShape)
+            .background(BTN_COLOR, CircleShape)
             .pointerInput(Unit) {
                 awaitPointerEventScope {
                     while (true) {
@@ -80,6 +73,6 @@ private fun FaceButton(
                 }
             }
     ) {
-        Text(label, color = Color.White, fontSize = (15 * (size.value / 50f)).sp)
+        Text(label, color = LBL_COLOR, fontSize = 18.sp)
     }
 }

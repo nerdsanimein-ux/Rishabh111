@@ -3,7 +3,7 @@ package com.rishabh.btgamepad.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
@@ -20,11 +20,10 @@ import com.rishabh.btgamepad.ui.LayoutMode
 
 enum class ShoulderSide { LEFT, RIGHT }
 
-private val TRIGGER_COLOR = Color(0xFF1565C0) // L2/R2 darker
-private val BUMPER_COLOR  = Color(0xFF1E88E5) // L1/R1 lighter
+private val SH_COLOR = Color(0xFF3A3A3A)
+private val SH_LABEL = Color(0xFF999999)
 
-// LEFT side: [Trigger][Bumper]  (LT/L2 on left, LB/L1 on right)
-// RIGHT side: [Bumper][Trigger] (RB/R1 on left, RT/R2 on right)
+// Both sides stack as a Column: bumper (LB/RB) on top, trigger (LT/RT) below
 
 @Composable
 fun ShoulderButtons(
@@ -36,19 +35,21 @@ fun ShoulderButtons(
     onR2: ((Boolean) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
-    val size = 52.dp
+    val size = 72.dp
 
-    Row(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        if (side == ShoulderSide.LEFT) {
-            val trigLabel = if (layout == LayoutMode.XBOX) "LT" else "L2"
-            val bmpLabel  = if (layout == LayoutMode.XBOX) "LB" else "L1"
-            ShoulderCircle(trigLabel, TRIGGER_COLOR, size, onL2)
-            ShoulderCircle(bmpLabel,  BUMPER_COLOR,  size, onL1)
-        } else {
-            val bmpLabel  = if (layout == LayoutMode.XBOX) "RB" else "R1"
-            val trigLabel = if (layout == LayoutMode.XBOX) "RT" else "R2"
-            ShoulderCircle(bmpLabel,  BUMPER_COLOR,  size, onR1)
-            ShoulderCircle(trigLabel, TRIGGER_COLOR, size, onR2)
+    if (side == ShoulderSide.LEFT) {
+        val bmpLabel  = if (layout == LayoutMode.XBOX) "LB" else "L1"
+        val trigLabel = if (layout == LayoutMode.XBOX) "LT" else "L2"
+        Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            ShoulderCircle(bmpLabel,  size, onL1)
+            ShoulderCircle(trigLabel, size, onL2)
+        }
+    } else {
+        val bmpLabel  = if (layout == LayoutMode.XBOX) "RB" else "R1"
+        val trigLabel = if (layout == LayoutMode.XBOX) "RT" else "R2"
+        Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            ShoulderCircle(bmpLabel,  size, onR1)
+            ShoulderCircle(trigLabel, size, onR2)
         }
     }
 }
@@ -56,7 +57,6 @@ fun ShoulderButtons(
 @Composable
 private fun ShoulderCircle(
     label: String,
-    color: Color,
     size: androidx.compose.ui.unit.Dp,
     onPressed: ((Boolean) -> Unit)?
 ) {
@@ -65,7 +65,7 @@ private fun ShoulderCircle(
         contentAlignment = Alignment.Center,
         modifier = Modifier
             .size(size)
-            .background(color, CircleShape)
+            .background(SH_COLOR, CircleShape)
             .pointerInput(Unit) {
                 awaitPointerEventScope {
                     while (true) {
@@ -78,6 +78,6 @@ private fun ShoulderCircle(
                 }
             }
     ) {
-        Text(label, color = Color.White, fontSize = 11.sp)
+        Text(label, color = SH_LABEL, fontSize = 13.sp)
     }
 }

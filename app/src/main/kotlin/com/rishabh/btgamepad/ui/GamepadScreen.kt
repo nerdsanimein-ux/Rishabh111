@@ -25,7 +25,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
@@ -41,13 +40,14 @@ import com.rishabh.btgamepad.ui.components.DPad
 import com.rishabh.btgamepad.ui.components.ShoulderButtons
 import com.rishabh.btgamepad.ui.components.ShoulderSide
 
-// Fixed element sizes — tuned to match the reference controller layout
-private val STICK_DP    = 124.dp   // large analog stick diameter
-private val DPAD_KEY_DP = 48.dp    // each DPad key; cross = 144dp × 144dp
-private val BTN_DP      = 52.dp    // face button; cross = 156dp × 156dp
-private val SHLDR_DP    = 52.dp    // shoulder circle; row = (52+6+52)=110dp
-private val STATUS_H    = 24.dp
-private val ACCENT      = Color(0xFF3D5AFE)
+private val DPAD_SZ   = 150.dp
+private val BTN_SZ    = 68.dp
+private val SH_SZ     = 72.dp
+private val SH_GAP    = 6.dp
+private val STICK_D   = 130.dp
+private val FACE_CROSS = BTN_SZ * 3
+private val ACCENT    = Color(0xFF3D5AFE)
+private val BG        = Color(0xFF111111)
 
 @Composable
 fun GamepadScreen(viewModel: GamepadViewModel) {
@@ -57,63 +57,55 @@ fun GamepadScreen(viewModel: GamepadViewModel) {
     val permDenied   by viewModel.permissionDenied.observeAsState(false)
     val context = LocalContext.current
 
-    Box(
-        Modifier
-            .fillMaxSize()
-            .background(Brush.verticalGradient(listOf(Color(0xFF0D1117), Color(0xFF0A0E1A))))
-    ) {
-        // ── Status bar ─────────────────────────────────────────────────────
+    Box(Modifier.fillMaxSize().background(BG)) {
+
+        // ── Top status bar ──────────────────────────────────────────────────
         Row(
             Modifier
                 .fillMaxWidth()
-                .height(STATUS_H)
-                .padding(horizontal = 10.dp),
+                .height(28.dp)
+                .padding(horizontal = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                Box(Modifier.size(7.dp).background(statusColor(state), CircleShape))
-                Text(statusText(state), color = statusColor(state), fontSize = 10.sp)
-            }
             GearButton { viewModel.toggleSettings() }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                LayoutDot(selected = layout == LayoutMode.PLAYSTATION) { viewModel.setLayoutMode(LayoutMode.PLAYSTATION) }
+                LayoutDot(selected = layout == LayoutMode.XBOX)        { viewModel.setLayoutMode(LayoutMode.XBOX) }
+                Box(Modifier.size(8.dp).background(statusColor(state), CircleShape))
+            }
         }
 
         // ── Controller layout ───────────────────────────────────────────────
         BoxWithConstraints(
             Modifier
                 .fillMaxSize()
-                .padding(top = STATUS_H)
+                .padding(top = 28.dp)
         ) {
             val W = maxWidth
             val H = maxHeight
 
-            val dpadSize  = DPAD_KEY_DP                 // cross = 3×dpadSize
-            val stickSize = STICK_DP                    // diameter
-            val btnSize   = BTN_DP                      // face button; cross = 3×btnSize
-            val shRow     = SHLDR_DP * 2 + 6.dp        // total shoulder row width = 110dp
-
             if (layout == LayoutMode.XBOX) {
-                // ── Xbox layout ────────────────────────────────────────────
-                // Shoulders at top corners; DPad left-center; face buttons right-center;
-                // BOTH sticks in the CENTER-BOTTOM zone (classic Xbox thumb position)
+                // Shoulders stacked at top-left / top-right corners
+                // DPad middle-left, face buttons middle-right
+                // Both sticks side-by-side center-bottom, system buttons between them
 
-                val shY   = H * 0.04f
-                val lShX  = W * 0.01f
-                val rShX  = W - shRow - W * 0.01f
+                val shY   = H * 0.03f
+                val lShX  = W * 0.02f
+                val rShX  = W - SH_SZ - W * 0.02f
 
-                // DPad and face buttons at same vertical band, outer edges
-                val ctrlY = H * 0.22f
-                val dpadX = W * 0.02f
-                val faceX = W - (btnSize * 3) - W * 0.02f
+                val dpadX = W * 0.08f
+                val dpadY = H * 0.28f
 
-                // System buttons centered, slightly below DPad/face midpoint
-                val sysX  = W * 0.50f - 55.dp
-                val sysY  = H * 0.44f
+                val faceX = W - FACE_CROSS - W * 0.06f
+                val faceY = H * 0.18f
 
-                // Both sticks side-by-side at bottom center
-                val stY   = H * 0.48f
-                val lStX  = W * 0.23f
-                val rStX  = W * 0.62f
+                val stY   = H * 0.46f
+                val lStX  = W * 0.26f
+                val rStX  = W * 0.57f
+
+                val sysX  = W * 0.5f - 80.dp
+                val sysY  = H * 0.58f
 
                 ShoulderButtons(ShoulderSide.LEFT, layout,
                     onL1 = viewModel::onL1Button, onL2 = viewModel::onL2Button,
@@ -122,42 +114,43 @@ fun GamepadScreen(viewModel: GamepadViewModel) {
                     onR1 = viewModel::onR1Button, onR2 = viewModel::onR2Button,
                     modifier = Modifier.absoluteOffset(rShX, shY))
 
-                DPad(viewModel::onDpadChange, modifier = Modifier.absoluteOffset(dpadX, ctrlY))
+                DPad(viewModel::onDpadChange,
+                    modifier = Modifier.absoluteOffset(dpadX, dpadY))
 
-                ActionButtons(layout, onA = viewModel::onAButton, onB = viewModel::onBButton,
+                ActionButtons(layout,
+                    onA = viewModel::onAButton, onB = viewModel::onBButton,
                     onX = viewModel::onXButton, onY = viewModel::onYButton,
-                    modifier = Modifier.absoluteOffset(faceX, ctrlY))
-
-                CenterButtons(viewModel::onSelectButton, viewModel::onStartButton,
-                    modifier = Modifier.absoluteOffset(sysX, sysY))
+                    modifier = Modifier.absoluteOffset(faceX, faceY))
 
                 AnalogStick("L", onMove = viewModel::onLeftStickMove,
                     modifier = Modifier.absoluteOffset(lStX, stY))
                 AnalogStick("R", onMove = viewModel::onRightStickMove,
                     modifier = Modifier.absoluteOffset(rStX, stY))
 
+                CenterButtons(viewModel::onSelectButton, viewModel::onStartButton,
+                    modifier = Modifier.absoluteOffset(sysX, sysY))
+
             } else {
-                // ── PlayStation layout ─────────────────────────────────────
-                // DPad top-left; shoulder circles right of DPad / left of face buttons;
-                // Face buttons top-right; BOTH sticks at the outer BOTTOM edges
+                // DPad top-left, left shoulders stacked right of DPad
+                // Face buttons top-right, right shoulders stacked left of face
+                // Sticks at bottom outer edges, system buttons top-center
 
-                val topY  = H * 0.04f
-                val dpadX = W * 0.02f
-                // Left shoulders start right after the DPad cross
-                val lShX  = dpadX + dpadSize * 3 + 10.dp
-                val faceX = W - (btnSize * 3) - W * 0.02f
-                // Right shoulders start right before the face button cross
-                val rShX  = faceX - shRow - 10.dp
+                val topY  = H * 0.08f
+                val dpadX = W * 0.06f
 
-                val sysX  = W * 0.50f - 55.dp
-                val sysY  = H * 0.46f
+                val lShX  = dpadX + DPAD_SZ + 12.dp
+                val faceX = W - FACE_CROSS - W * 0.06f
+                val rShX  = faceX - SH_SZ - 12.dp
 
-                // Sticks at outer bottom edges — clear of DPad/face bottom
-                val stY   = H * 0.52f
-                val lStX  = W * 0.01f
-                val rStX  = W - stickSize - W * 0.01f
+                val stY   = H * 0.46f
+                val lStX  = W * 0.02f
+                val rStX  = W - STICK_D - W * 0.02f
 
-                DPad(viewModel::onDpadChange, modifier = Modifier.absoluteOffset(dpadX, topY))
+                val sysX  = W * 0.5f - 80.dp
+                val sysY  = H * 0.08f
+
+                DPad(viewModel::onDpadChange,
+                    modifier = Modifier.absoluteOffset(dpadX, topY))
 
                 ShoulderButtons(ShoulderSide.LEFT, layout,
                     onL1 = viewModel::onL1Button, onL2 = viewModel::onL2Button,
@@ -166,17 +159,18 @@ fun GamepadScreen(viewModel: GamepadViewModel) {
                     onR1 = viewModel::onR1Button, onR2 = viewModel::onR2Button,
                     modifier = Modifier.absoluteOffset(rShX, topY))
 
-                ActionButtons(layout, onA = viewModel::onAButton, onB = viewModel::onBButton,
+                ActionButtons(layout,
+                    onA = viewModel::onAButton, onB = viewModel::onBButton,
                     onX = viewModel::onXButton, onY = viewModel::onYButton,
                     modifier = Modifier.absoluteOffset(faceX, topY))
-
-                CenterButtons(viewModel::onSelectButton, viewModel::onStartButton,
-                    modifier = Modifier.absoluteOffset(sysX, sysY))
 
                 AnalogStick("L", onMove = viewModel::onLeftStickMove,
                     modifier = Modifier.absoluteOffset(lStX, stY))
                 AnalogStick("R", onMove = viewModel::onRightStickMove,
                     modifier = Modifier.absoluteOffset(rStX, stY))
+
+                CenterButtons(viewModel::onSelectButton, viewModel::onStartButton,
+                    modifier = Modifier.absoluteOffset(sysX, sysY))
             }
         }
 
@@ -238,9 +232,7 @@ fun GamepadScreen(viewModel: GamepadViewModel) {
 @Composable
 private fun StateOverlay(content: @Composable ColumnScope.() -> Unit) {
     Box(
-        Modifier
-            .fillMaxSize()
-            .background(Color(0xE0000000)),
+        Modifier.fillMaxSize().background(Color(0xE0000000)),
         contentAlignment = Alignment.Center
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, content = content)
@@ -253,8 +245,8 @@ private fun GearButton(onClick: () -> Unit) {
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier
-            .size(22.dp)
-            .background(Color(0x331E2A3A), CircleShape)
+            .size(24.dp)
+            .background(Color(0xFF2A2A2A), CircleShape)
             .pointerInput(Unit) {
                 awaitPointerEventScope {
                     while (true) {
@@ -268,8 +260,33 @@ private fun GearButton(onClick: () -> Unit) {
                 }
             }
     ) {
-        Text("⚙", color = Color(0xFF78909C), fontSize = 12.sp)
+        Text("⚙", color = Color(0xFF777777), fontSize = 12.sp)
     }
+}
+
+@Composable
+private fun LayoutDot(selected: Boolean, onClick: () -> Unit) {
+    val haptic = LocalHapticFeedback.current
+    Box(
+        modifier = Modifier
+            .size(10.dp)
+            .background(
+                if (selected) Color(0xFF888888) else Color(0xFF3A3A3A),
+                CircleShape
+            )
+            .pointerInput(Unit) {
+                awaitPointerEventScope {
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        if (!event.changes.any { it.pressed }) {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onClick()
+                        }
+                        event.changes.forEach { it.consume() }
+                    }
+                }
+            }
+    )
 }
 
 @Composable
@@ -279,19 +296,16 @@ private fun SettingsOverlay(
     onClose: () -> Unit
 ) {
     Box(
-        Modifier
-            .fillMaxSize()
-            .background(Color(0xE8000000)),
+        Modifier.fillMaxSize().background(Color(0xE8000000)),
         contentAlignment = Alignment.Center
     ) {
         Column(
             Modifier
-                .background(Color(0xFF161B27), RoundedCornerShape(16.dp))
+                .background(Color(0xFF1E1E1E), RoundedCornerShape(16.dp))
                 .padding(20.dp)
                 .width(300.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Header row with X close button always visible
             Row(
                 Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -300,17 +314,14 @@ private fun SettingsOverlay(
                 Text("Settings", color = Color.White, fontSize = 18.sp)
                 CloseButton(onClose)
             }
-
-            // Layout toggle
-            Text("Controller Layout", color = Color(0xFF78909C), fontSize = 11.sp)
+            Text("Controller Layout", color = Color(0xFF666666), fontSize = 11.sp)
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 ToggleChip("Xbox",        layout == LayoutMode.XBOX)        { onLayoutChange(LayoutMode.XBOX) }
                 ToggleChip("PlayStation", layout == LayoutMode.PLAYSTATION) { onLayoutChange(LayoutMode.PLAYSTATION) }
             }
-
             Text(
-                "Switch between Xbox controller layout\n(sticks in center) and PlayStation layout\n(sticks at outer edges).",
-                color = Color(0xFF546E7A), fontSize = 10.sp
+                "Xbox: sticks center-bottom\nPlayStation: sticks at outer edges",
+                color = Color(0xFF555555), fontSize = 10.sp
             )
         }
     }
@@ -323,7 +334,7 @@ private fun CloseButton(onClick: () -> Unit) {
         contentAlignment = Alignment.Center,
         modifier = Modifier
             .size(30.dp)
-            .background(Color(0xFF2D3748), CircleShape)
+            .background(Color(0xFF333333), CircleShape)
             .pointerInput(Unit) {
                 awaitPointerEventScope {
                     while (true) {
@@ -337,7 +348,7 @@ private fun CloseButton(onClick: () -> Unit) {
                 }
             }
     ) {
-        Text("✕", color = Color(0xFFB0BEC5), fontSize = 13.sp)
+        Text("✕", color = Color(0xFF888888), fontSize = 13.sp)
     }
 }
 
@@ -346,24 +357,14 @@ private fun ToggleChip(label: String, selected: Boolean, onClick: () -> Unit) {
     Button(
         onClick = onClick,
         colors = ButtonDefaults.buttonColors(
-            containerColor = if (selected) ACCENT else Color(0xFF2D3748)
+            containerColor = if (selected) ACCENT else Color(0xFF2D2D2D)
         ),
         shape = RoundedCornerShape(8.dp)
     ) { Text(label, fontSize = 12.sp) }
 }
 
-// Dp-based offset (non-composable form of Modifier.offset)
 private fun Modifier.absoluteOffset(x: androidx.compose.ui.unit.Dp, y: androidx.compose.ui.unit.Dp): Modifier =
     this.offset(x = x, y = y)
-
-private fun statusText(state: BluetoothHidService.State) = when (state) {
-    BluetoothHidService.State.IDLE             -> "Idle"
-    BluetoothHidService.State.BLUETOOTH_OFF    -> "Bluetooth OFF"
-    BluetoothHidService.State.REGISTERING      -> "Registering HID…"
-    BluetoothHidService.State.WAITING_FOR_HOST -> "Waiting for PC…"
-    BluetoothHidService.State.CONNECTED        -> "Connected ✓"
-    BluetoothHidService.State.ERROR            -> "Error — tap ⚙ to retry"
-}
 
 private fun statusColor(state: BluetoothHidService.State) = when (state) {
     BluetoothHidService.State.CONNECTED        -> Color(0xFF00E676)
@@ -371,5 +372,5 @@ private fun statusColor(state: BluetoothHidService.State) = when (state) {
     BluetoothHidService.State.BLUETOOTH_OFF,
     BluetoothHidService.State.ERROR            -> Color(0xFFFF5252)
     BluetoothHidService.State.REGISTERING      -> Color(0xFF40C4FF)
-    else                                       -> Color(0xFF607D8B)
+    else                                       -> Color(0xFF444444)
 }
