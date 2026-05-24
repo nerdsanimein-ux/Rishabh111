@@ -1,55 +1,37 @@
 package com.rishabh.btgamepad.hid
 
-import com.rishabh.btgamepad.hid.HidConstants.AXIS_CENTER
-import com.rishabh.btgamepad.hid.HidConstants.DPAD_CENTERED
-
-/**
- * Holds the current gamepad state and serializes it to an 8-byte HID report.
- * All mutations must happen on a single thread (UI thread).
- */
 class HidReportBuilder {
 
-    var leftX: Byte = AXIS_CENTER
-    var leftY: Byte = AXIS_CENTER
-    var rightX: Byte = AXIS_CENTER
-    var rightY: Byte = AXIS_CENTER
+    // Signed axes: center = 0, range -127..127
+    var leftX:  Byte = 0
+    var leftY:  Byte = 0
+    var rightX: Byte = 0
+    var rightY: Byte = 0
 
-    /** Hat value: 0x00=Up … 0x07=UpLeft, 0x0F=Center */
-    var dpad: Byte = DPAD_CENTERED
+    // Hat switch: 0-7 for directions, 0xFF.toByte() = null/centered
+    var dpad: Byte = HidConstants.DPAD_CENTERED
 
-    /** Bits 0-3: A, B, X, Y */
-    var buttons1: Byte = 0
+    // 10 buttons packed into a single Int (bits 0-9 used, 10-15 padding)
+    private var buttons: Int = 0
 
-    /** Bits 0-7: L1, R1, L2, R2, Start, Select, L3, R3 */
-    var buttons2: Byte = 0
-
-    fun toReport(): ByteArray = byteArrayOf(
-        leftX,
-        leftY,
-        rightX,
-        rightY,
-        (dpad.toInt() and 0x0F).toByte(),
-        buttons1,
-        buttons2,
-        0x00.toByte()
-    )
-
-    /**
-     * @param byteGroup 1 = face buttons byte, 2 = shoulder/system byte
-     */
-    fun setButton(mask: Int, byteGroup: Int, pressed: Boolean) {
-        when (byteGroup) {
-            1 -> buttons1 = if (pressed) (buttons1.toInt() or mask).toByte()
-                            else (buttons1.toInt() and mask.inv()).toByte()
-            2 -> buttons2 = if (pressed) (buttons2.toInt() or mask).toByte()
-                            else (buttons2.toInt() and mask.inv()).toByte()
-        }
+    fun setButton(mask: Int, pressed: Boolean) {
+        buttons = if (pressed) buttons or mask else buttons and mask.inv()
     }
 
+    fun toReport(): ByteArray = byteArrayOf(
+        (buttons and 0xFF).toByte(),          // Byte 0: buttons 0-7
+        ((buttons shr 8) and 0xFF).toByte(),  // Byte 1: buttons 8-9 + 6-bit pad
+        leftX,
+        leftY,
+        0,      // Z axis (spare / triggers combined — always 0 for now)
+        rightX,
+        rightY,
+        dpad
+    )
+
     fun reset() {
-        leftX = AXIS_CENTER; leftY = AXIS_CENTER
-        rightX = AXIS_CENTER; rightY = AXIS_CENTER
-        dpad = DPAD_CENTERED
-        buttons1 = 0; buttons2 = 0
+        leftX = 0; leftY = 0; rightX = 0; rightY = 0
+        dpad = HidConstants.DPAD_CENTERED
+        buttons = 0
     }
 }

@@ -53,7 +53,7 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
     fun openBluetoothSettings(context: Context) =
         context.startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
 
-    // ---- Input events ----
+    // ── Input events ─────────────────────────────────────────────────────────
 
     fun onLeftStickMove(x: Float, y: Float) {
         val rb = reportBuilder ?: return
@@ -65,21 +65,23 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
     }
     fun onDpadChange(direction: Byte) { reportBuilder?.dpad = direction; dispatchReport() }
 
-    fun onAButton(p: Boolean)      = setButton(HidConstants.BTN_A,      1, p)
-    fun onBButton(p: Boolean)      = setButton(HidConstants.BTN_B,      1, p)
-    fun onXButton(p: Boolean)      = setButton(HidConstants.BTN_X,      1, p)
-    fun onYButton(p: Boolean)      = setButton(HidConstants.BTN_Y,      1, p)
-    fun onL1Button(p: Boolean)     = setButton(HidConstants.BTN_L1,     2, p)
-    fun onR1Button(p: Boolean)     = setButton(HidConstants.BTN_R1,     2, p)
-    fun onL2Button(p: Boolean)     = setButton(HidConstants.BTN_L2,     2, p)
-    fun onR2Button(p: Boolean)     = setButton(HidConstants.BTN_R2,     2, p)
-    fun onStartButton(p: Boolean)  = setButton(HidConstants.BTN_START,  2, p)
-    fun onSelectButton(p: Boolean) = setButton(HidConstants.BTN_SELECT, 2, p)
+    fun onAButton(p: Boolean)      = setButton(HidConstants.BTN_A,      p)
+    fun onBButton(p: Boolean)      = setButton(HidConstants.BTN_B,      p)
+    fun onXButton(p: Boolean)      = setButton(HidConstants.BTN_X,      p)
+    fun onYButton(p: Boolean)      = setButton(HidConstants.BTN_Y,      p)
+    fun onL1Button(p: Boolean)     = setButton(HidConstants.BTN_L1,     p)
+    fun onR1Button(p: Boolean)     = setButton(HidConstants.BTN_R1,     p)
+    fun onL2Button(p: Boolean)     = setButton(HidConstants.BTN_L2,     p)
+    fun onR2Button(p: Boolean)     = setButton(HidConstants.BTN_R2,     p)
+    fun onStartButton(p: Boolean)  = setButton(HidConstants.BTN_START,  p)
+    fun onSelectButton(p: Boolean) = setButton(HidConstants.BTN_SELECT, p)
 
-    private fun setButton(mask: Int, group: Int, pressed: Boolean) {
-        reportBuilder?.setButton(mask, group, pressed); dispatchReport()
+    private fun setButton(mask: Int, pressed: Boolean) {
+        reportBuilder?.setButton(mask, pressed); dispatchReport()
     }
     private fun dispatchReport() { hidService?.sendReport(reportBuilder?.toReport() ?: return) }
+
+    // Signed axis: -1.0f → -127, 0f → 0, 1.0f → 127
     private fun normalizeAxis(v: Float): Byte =
-        ((v.coerceIn(-1f, 1f) * 127f) + 128f).roundToInt().coerceIn(0, 255).toByte()
+        (v.coerceIn(-1f, 1f) * 127f).roundToInt().coerceIn(-127, 127).toByte()
 }

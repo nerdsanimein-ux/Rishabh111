@@ -1,40 +1,33 @@
 package com.rishabh.btgamepad.hid
 
 object HidConstants {
-    const val REPORT_ID: Byte = 1
+    // No Report ID in descriptor → pass 0 to sendReport / replyReport
+    const val REPORT_ID: Int = 0
     const val REPORT_SIZE_BYTES = 8
 
-    const val AXIS_LX_IDX = 0
-    const val AXIS_LY_IDX = 1
-    const val AXIS_RX_IDX = 2
-    const val AXIS_RY_IDX = 3
+    // Button bitmasks — single 16-bit field, bytes 0-1 of report
+    const val BTN_A      = 1 shl 0   // 0x0001
+    const val BTN_B      = 1 shl 1   // 0x0002
+    const val BTN_X      = 1 shl 2   // 0x0004
+    const val BTN_Y      = 1 shl 3   // 0x0008
+    const val BTN_L1     = 1 shl 4   // 0x0010
+    const val BTN_R1     = 1 shl 5   // 0x0020
+    const val BTN_L2     = 1 shl 6   // 0x0040
+    const val BTN_R2     = 1 shl 7   // 0x0080
+    const val BTN_START  = 1 shl 8   // 0x0100
+    const val BTN_SELECT = 1 shl 9   // 0x0200
 
-    // D-pad hat switch values (4 bits: 0x0–0x7, 0xF = centered)
-    const val DPAD_CENTERED: Byte = 0x0F
-    const val DPAD_UP: Byte = 0x00
-    const val DPAD_UP_RIGHT: Byte = 0x01
-    const val DPAD_RIGHT: Byte = 0x02
-    const val DPAD_DOWN_RIGHT: Byte = 0x03
-    const val DPAD_DOWN: Byte = 0x04
-    const val DPAD_DOWN_LEFT: Byte = 0x05
-    const val DPAD_LEFT: Byte = 0x06
-    const val DPAD_UP_LEFT: Byte = 0x07
+    // Hat switch values — 0-7 valid, any value > 7 = null / centered
+    const val DPAD_CENTERED:   Byte = 0xFF.toByte()   // null state
+    const val DPAD_UP:         Byte = 0
+    const val DPAD_UP_RIGHT:   Byte = 1
+    const val DPAD_RIGHT:      Byte = 2
+    const val DPAD_DOWN_RIGHT: Byte = 3
+    const val DPAD_DOWN:       Byte = 4
+    const val DPAD_DOWN_LEFT:  Byte = 5
+    const val DPAD_LEFT:       Byte = 6
+    const val DPAD_UP_LEFT:    Byte = 7
 
-    // Byte 5: face buttons (bits 0-3)
-    const val BTN_A: Int = 0x01
-    const val BTN_B: Int = 0x02
-    const val BTN_X: Int = 0x04
-    const val BTN_Y: Int = 0x08
-
-    // Byte 6: shoulder + system buttons (bits 0-7)
-    const val BTN_L1: Int = 0x01
-    const val BTN_R1: Int = 0x02
-    const val BTN_L2: Int = 0x04
-    const val BTN_R2: Int = 0x08
-    const val BTN_START: Int = 0x10
-    const val BTN_SELECT: Int = 0x20
-    const val BTN_L3: Int = 0x40
-    const val BTN_R3: Int = 0x80
-
-    const val AXIS_CENTER: Byte = 128.toByte()
+    // Signed axes: center = 0, min = -127, max = 127
+    const val AXIS_CENTER: Byte = 0
 }
