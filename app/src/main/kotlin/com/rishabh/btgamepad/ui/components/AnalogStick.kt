@@ -34,8 +34,8 @@ fun AnalogStick(
     onMove: (x: Float, y: Float) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val baseRadius  = (54 * scale).dp
-    val thumbRadius = (20 * scale).dp
+    val baseRadius  = (62 * scale).dp   // diameter = 124dp at scale=1
+    val thumbRadius = (22 * scale).dp
     var thumbOffset by remember { mutableStateOf(Offset.Zero) }
     val haptic = LocalHapticFeedback.current
 

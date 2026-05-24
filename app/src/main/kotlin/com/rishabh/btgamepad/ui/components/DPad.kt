@@ -31,7 +31,7 @@ fun DPad(
     scale: Float = 1f,
     modifier: Modifier = Modifier
 ) {
-    val btnSize = (46 * scale).dp
+    val btnSize = (48 * scale).dp   // cross = 144dp at scale=1
     var up    by remember { mutableStateOf(false) }
     var down  by remember { mutableStateOf(false) }
     var left  by remember { mutableStateOf(false) }

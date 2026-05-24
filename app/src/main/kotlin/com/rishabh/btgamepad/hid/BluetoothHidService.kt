@@ -35,12 +35,16 @@ class BluetoothHidService : Service() {
         fun getService(): BluetoothHidService = this@BluetoothHidService
     }
 
-    private val binder = LocalBinder()
+    private val binder       = LocalBinder()
     private var hidDevice: BluetoothHidDevice? = null
     private var connectedHost: BluetoothDevice? = null
     private val reportBuilder = HidReportBuilder()
-    private val mainHandler = Handler(Looper.getMainLooper())
-    private val executor = Executors.newSingleThreadExecutor()
+    private val mainHandler  = Handler(Looper.getMainLooper())
+    private val executor     = Executors.newSingleThreadExecutor()
+    private var retryCount   = 0
+
+    // Held as a field so it is never GC'd between getProfileProxy() and the callback
+    private var profileListener: BluetoothProfile.ServiceListener? = null
 
     var onStateChanged: ((State) -> Unit)? = null
     var currentState: State = State.IDLE
@@ -49,17 +53,33 @@ class BluetoothHidService : Service() {
             mainHandler.post { onStateChanged?.invoke(value) }
         }
 
-    // If the HID profile proxy never responds within 12s, give up with ERROR
+    // If onServiceConnected never fires within 15s, retry once then give up
     private val registrationTimeoutRunnable = Runnable {
-        if (currentState == State.REGISTERING) currentState = State.ERROR
+        if (currentState == State.REGISTERING) {
+            if (retryCount < 2) {
+                retryCount++
+                // Close the stale proxy and try again
+                hidDevice?.unregisterApp()
+                val btm = getSystemService(BluetoothManager::class.java)
+                btm.adapter?.closeProfileProxy(BluetoothProfile.HID_DEVICE, hidDevice)
+                hidDevice = null
+                profileListener = null
+                mainHandler.postDelayed({ registerHidProfile() }, 1500)
+            } else {
+                retryCount = 0
+                currentState = State.ERROR
+            }
+        }
     }
 
     private val btStateReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             when (intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR)) {
                 BluetoothAdapter.STATE_ON -> {
-                    if (currentState == State.BLUETOOTH_OFF || currentState == State.ERROR)
-                        mainHandler.postDelayed({ registerHidProfile() }, 1000)
+                    if (currentState == State.BLUETOOTH_OFF || currentState == State.ERROR) {
+                        retryCount = 0
+                        mainHandler.postDelayed({ registerHidProfile() }, 2000)
+                    }
                 }
                 BluetoothAdapter.STATE_OFF -> {
                     mainHandler.removeCallbacks(registrationTimeoutRunnable)
@@ -70,7 +90,6 @@ class BluetoothHidService : Service() {
     }
 
     private val hidCallback = object : BluetoothHidDevice.Callback() {
-
         @SuppressLint("MissingPermission")
         override fun onAppStatusChanged(pluggedDevice: BluetoothDevice?, registered: Boolean) {
             mainHandler.removeCallbacks(registrationTimeoutRunnable)
@@ -109,7 +128,8 @@ class BluetoothHidService : Service() {
         super.onCreate()
         startForeground(NOTIFICATION_ID, buildNotification("Starting…"))
         registerReceiver(btStateReceiver, IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED))
-        registerHidProfile()
+        // Delay first attempt — BT profile services may not be ready immediately on startup
+        mainHandler.postDelayed({ registerHidProfile() }, 2000)
     }
 
     override fun onBind(intent: Intent?): IBinder = binder
@@ -118,6 +138,7 @@ class BluetoothHidService : Service() {
         mainHandler.removeCallbacks(registrationTimeoutRunnable)
         unregisterReceiver(btStateReceiver)
         hidDevice?.unregisterApp()
+        profileListener = null
         getSystemService(BluetoothManager::class.java)
             .adapter?.closeProfileProxy(BluetoothProfile.HID_DEVICE, hidDevice)
         super.onDestroy()
@@ -125,55 +146,54 @@ class BluetoothHidService : Service() {
 
     @SuppressLint("MissingPermission")
     private fun registerHidProfile() {
-        // Explicit permission guard — getProfileProxy() is silent on permission errors
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
             checkSelfPermission(android.Manifest.permission.BLUETOOTH_CONNECT)
                 != PackageManager.PERMISSION_GRANTED
         ) {
-            currentState = State.ERROR
-            return
+            currentState = State.ERROR; return
         }
 
         val adapter = getSystemService(BluetoothManager::class.java).adapter ?: run {
             currentState = State.ERROR; return
         }
-        if (!adapter.isEnabled) {
-            currentState = State.BLUETOOTH_OFF; return
-        }
+        if (!adapter.isEnabled) { currentState = State.BLUETOOTH_OFF; return }
 
         currentState = State.REGISTERING
-        mainHandler.postDelayed(registrationTimeoutRunnable, 12_000)
+        // Schedule timeout — 15s gives the BT stack time to respond
+        mainHandler.removeCallbacks(registrationTimeoutRunnable)
+        mainHandler.postDelayed(registrationTimeoutRunnable, 15_000)
 
-        val requested = adapter.getProfileProxy(
-            this,
-            object : BluetoothProfile.ServiceListener {
-                override fun onServiceConnected(profile: Int, proxy: BluetoothProfile) {
-                    hidDevice = proxy as BluetoothHidDevice
-                    registerApp()
-                }
-                override fun onServiceDisconnected(profile: Int) {
-                    hidDevice = null
-                    if (currentState != State.BLUETOOTH_OFF) currentState = State.IDLE
-                }
-            },
-            BluetoothProfile.HID_DEVICE
-        )
+        // Store as field — prevents the GC from collecting the listener
+        // before the BT stack calls back on slow devices
+        profileListener = object : BluetoothProfile.ServiceListener {
+            override fun onServiceConnected(profile: Int, proxy: BluetoothProfile) {
+                mainHandler.removeCallbacks(registrationTimeoutRunnable)
+                hidDevice = proxy as BluetoothHidDevice
+                // Small delay before registerApp — some BT stacks need it
+                mainHandler.postDelayed({ registerApp() }, 300)
+            }
+            override fun onServiceDisconnected(profile: Int) {
+                hidDevice = null
+                if (currentState != State.BLUETOOTH_OFF) currentState = State.IDLE
+            }
+        }
 
-        // getProfileProxy returns false if the profile isn't available on this device
-        if (!requested) {
+        val ok = adapter.getProfileProxy(this, profileListener!!, BluetoothProfile.HID_DEVICE)
+        if (!ok) {
             mainHandler.removeCallbacks(registrationTimeoutRunnable)
+            profileListener = null
             currentState = State.ERROR
         }
     }
 
     @SuppressLint("MissingPermission")
     private fun registerApp() {
+        val hid = hidDevice ?: run { currentState = State.ERROR; return }
         val qos = BluetoothHidDeviceAppQosSettings(
             BluetoothHidDeviceAppQosSettings.SERVICE_BEST_EFFORT,
-            800, 9, 0, 11250,
-            BluetoothHidDeviceAppQosSettings.MAX
+            800, 9, 0, 11250, BluetoothHidDeviceAppQosSettings.MAX
         )
-        hidDevice?.registerApp(GamepadHidDescriptor.buildSdpSettings(), null, qos, executor, hidCallback)
+        hid.registerApp(GamepadHidDescriptor.buildSdpSettings(), null, qos, executor, hidCallback)
     }
 
     private fun requestDiscoverable() {
@@ -193,10 +213,14 @@ class BluetoothHidService : Service() {
     fun getReportBuilder(): HidReportBuilder = reportBuilder
 
     fun retry() {
+        retryCount = 0
         mainHandler.removeCallbacks(registrationTimeoutRunnable)
         hidDevice?.unregisterApp()
+        profileListener = null
+        val btm = getSystemService(BluetoothManager::class.java)
+        btm.adapter?.closeProfileProxy(BluetoothProfile.HID_DEVICE, hidDevice)
         hidDevice = null
-        registerHidProfile()
+        mainHandler.postDelayed({ registerHidProfile() }, 1000)
     }
 
     private fun buildNotification(text: String): Notification {
@@ -208,7 +232,8 @@ class BluetoothHidService : Service() {
             .setContentText(text)
             .setSmallIcon(R.drawable.ic_gamepad)
             .setContentIntent(
-                PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
+                PendingIntent.getActivity(this, 0,
+                    Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
             )
             .setOngoing(true)
             .build()

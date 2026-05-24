@@ -36,7 +36,7 @@ fun ShoulderButtons(
     onR2: ((Boolean) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
-    val size = 46.dp
+    val size = 52.dp
 
     Row(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         if (side == ShoulderSide.LEFT) {

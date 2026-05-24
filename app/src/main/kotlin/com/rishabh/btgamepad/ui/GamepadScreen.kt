@@ -41,11 +41,11 @@ import com.rishabh.btgamepad.ui.components.DPad
 import com.rishabh.btgamepad.ui.components.ShoulderButtons
 import com.rishabh.btgamepad.ui.components.ShoulderSide
 
-// Stick diameter, DPad key size, face button size — fixed to avoid layout churn
-private val STICK_DP    = 108.dp   // 2 × 54dp radius
-private val DPAD_KEY_DP = 44.dp    // each DPad key; cross = 132dp × 132dp
-private val BTN_DP      = 48.dp    // face button; cross = 144dp × 144dp
-private val SHLDR_DP    = 46.dp    // shoulder circle diameter; row = (46+6+46)=98dp
+// Fixed element sizes — tuned to match the reference controller layout
+private val STICK_DP    = 124.dp   // large analog stick diameter
+private val DPAD_KEY_DP = 48.dp    // each DPad key; cross = 144dp × 144dp
+private val BTN_DP      = 52.dp    // face button; cross = 156dp × 156dp
+private val SHLDR_DP    = 52.dp    // shoulder circle; row = (52+6+52)=110dp
 private val STATUS_H    = 24.dp
 private val ACCENT      = Color(0xFF3D5AFE)
 
@@ -90,29 +90,31 @@ fun GamepadScreen(viewModel: GamepadViewModel) {
             val dpadSize  = DPAD_KEY_DP                 // cross = 3×dpadSize
             val stickSize = STICK_DP                    // diameter
             val btnSize   = BTN_DP                      // face button; cross = 3×btnSize
-            val shRow     = SHLDR_DP * 2 + 6.dp        // total shoulder row width = 98dp
+            val shRow     = SHLDR_DP * 2 + 6.dp        // total shoulder row width = 110dp
 
             if (layout == LayoutMode.XBOX) {
                 // ── Xbox layout ────────────────────────────────────────────
-                // Analog sticks both in CENTER-BOTTOM zone (Xbox thumb position)
-                // DPad upper-LEFT, face buttons upper-RIGHT
+                // Shoulders at top corners; DPad left-center; face buttons right-center;
+                // BOTH sticks in the CENTER-BOTTOM zone (classic Xbox thumb position)
 
-                val lShX = W * 0.01f
-                val rShX = W - shRow - W * 0.01f
-                val shY  = H * 0.04f
+                val shY   = H * 0.04f
+                val lShX  = W * 0.01f
+                val rShX  = W - shRow - W * 0.01f
 
-                val dpadX = W * 0.01f
-                val faceX = W - (btnSize * 3) - W * 0.01f
-                val ctrlY = H * 0.30f       // DPad and face buttons vertical center row
+                // DPad and face buttons at same vertical band, outer edges
+                val ctrlY = H * 0.22f
+                val dpadX = W * 0.02f
+                val faceX = W - (btnSize * 3) - W * 0.02f
 
-                val lStX = W * 0.22f
-                val rStX = W * 0.62f
-                val stY  = H * 0.52f        // sticks sit below DPad/buttons
+                // System buttons centered, slightly below DPad/face midpoint
+                val sysX  = W * 0.50f - 55.dp
+                val sysY  = H * 0.44f
 
-                val sysX = W * 0.50f - 55.dp
-                val sysY = H * 0.42f
+                // Both sticks side-by-side at bottom center
+                val stY   = H * 0.48f
+                val lStX  = W * 0.23f
+                val rStX  = W * 0.62f
 
-                // Shoulder rows
                 ShoulderButtons(ShoulderSide.LEFT, layout,
                     onL1 = viewModel::onL1Button, onL2 = viewModel::onL2Button,
                     modifier = Modifier.absoluteOffset(lShX, shY))
@@ -120,19 +122,15 @@ fun GamepadScreen(viewModel: GamepadViewModel) {
                     onR1 = viewModel::onR1Button, onR2 = viewModel::onR2Button,
                     modifier = Modifier.absoluteOffset(rShX, shY))
 
-                // D-Pad (cross = 3×dpadKey)
                 DPad(viewModel::onDpadChange, modifier = Modifier.absoluteOffset(dpadX, ctrlY))
 
-                // Face buttons (cross = 3×btnSize)
                 ActionButtons(layout, onA = viewModel::onAButton, onB = viewModel::onBButton,
                     onX = viewModel::onXButton, onY = viewModel::onYButton,
                     modifier = Modifier.absoluteOffset(faceX, ctrlY))
 
-                // Center / system buttons
                 CenterButtons(viewModel::onSelectButton, viewModel::onStartButton,
                     modifier = Modifier.absoluteOffset(sysX, sysY))
 
-                // Analog sticks (both in center-bottom zone)
                 AnalogStick("L", onMove = viewModel::onLeftStickMove,
                     modifier = Modifier.absoluteOffset(lStX, stY))
                 AnalogStick("R", onMove = viewModel::onRightStickMove,
@@ -140,27 +138,27 @@ fun GamepadScreen(viewModel: GamepadViewModel) {
 
             } else {
                 // ── PlayStation layout ─────────────────────────────────────
-                // DPad upper-left, Face buttons upper-right
-                // Both sticks at BOTTOM outer edges (PS thumb position)
-                // Shoulder rows between DPad and face buttons at top
+                // DPad top-left; shoulder circles right of DPad / left of face buttons;
+                // Face buttons top-right; BOTH sticks at the outer BOTTOM edges
 
-                val topY      = H * 0.04f
-                val dpadX     = W * 0.02f
-                val lShX      = dpadX + dpadSize * 3 + 8.dp   // right of DPad
-                val rShX      = W - (btnSize * 3) - W * 0.01f - shRow - 8.dp
-                val faceX     = W - (btnSize * 3) - W * 0.01f
+                val topY  = H * 0.04f
+                val dpadX = W * 0.02f
+                // Left shoulders start right after the DPad cross
+                val lShX  = dpadX + dpadSize * 3 + 10.dp
+                val faceX = W - (btnSize * 3) - W * 0.02f
+                // Right shoulders start right before the face button cross
+                val rShX  = faceX - shRow - 10.dp
 
-                val sysX      = W * 0.50f - 55.dp
-                val sysY      = H * 0.46f   // below DPad bottom edge
+                val sysX  = W * 0.50f - 55.dp
+                val sysY  = H * 0.46f
 
-                val lStX      = W * 0.01f
-                val rStX      = W - stickSize - W * 0.01f
-                val stY       = H * 0.50f   // clear of face buttons bottom edge
+                // Sticks at outer bottom edges — clear of DPad/face bottom
+                val stY   = H * 0.52f
+                val lStX  = W * 0.01f
+                val rStX  = W - stickSize - W * 0.01f
 
-                // D-Pad top-left
                 DPad(viewModel::onDpadChange, modifier = Modifier.absoluteOffset(dpadX, topY))
 
-                // Shoulder rows (beside DPad and face buttons)
                 ShoulderButtons(ShoulderSide.LEFT, layout,
                     onL1 = viewModel::onL1Button, onL2 = viewModel::onL2Button,
                     modifier = Modifier.absoluteOffset(lShX, topY))
@@ -168,20 +166,15 @@ fun GamepadScreen(viewModel: GamepadViewModel) {
                     onR1 = viewModel::onR1Button, onR2 = viewModel::onR2Button,
                     modifier = Modifier.absoluteOffset(rShX, topY))
 
-                // Face buttons top-right
                 ActionButtons(layout, onA = viewModel::onAButton, onB = viewModel::onBButton,
                     onX = viewModel::onXButton, onY = viewModel::onYButton,
                     modifier = Modifier.absoluteOffset(faceX, topY))
 
-                // Center buttons
                 CenterButtons(viewModel::onSelectButton, viewModel::onStartButton,
                     modifier = Modifier.absoluteOffset(sysX, sysY))
 
-                // Left stick bottom-far-left
                 AnalogStick("L", onMove = viewModel::onLeftStickMove,
                     modifier = Modifier.absoluteOffset(lStX, stY))
-
-                // Right stick bottom-far-right
                 AnalogStick("R", onMove = viewModel::onRightStickMove,
                     modifier = Modifier.absoluteOffset(rStX, stY))
             }

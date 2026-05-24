@@ -37,7 +37,7 @@ fun ActionButtons(
     onY: (Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val btnSize = (50 * scale).dp
+    val btnSize = (52 * scale).dp   // cross = 156dp at scale=1
 
     val (topLabel, topColor)   = if (layout == LayoutMode.XBOX) "Y" to CLR_YELLOW else "△" to CLR_GREEN
     val (leftLabel, leftColor) = if (layout == LayoutMode.XBOX) "X" to CLR_BLUE   else "□" to CLR_PINK
