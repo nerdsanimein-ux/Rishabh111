@@ -92,11 +92,12 @@ class BluetoothHidService : Service() {
     private val hidCallback = object : BluetoothHidDevice.Callback() {
         @SuppressLint("MissingPermission")
         override fun onAppStatusChanged(pluggedDevice: BluetoothDevice?, registered: Boolean) {
-            mainHandler.removeCallbacks(registrationTimeoutRunnable)
             if (registered) {
+                mainHandler.removeCallbacks(registrationTimeoutRunnable)
                 currentState = State.WAITING_FOR_HOST
                 requestDiscoverable()
-            } else {
+            } else if (currentState != State.REGISTERING) {
+                mainHandler.removeCallbacks(registrationTimeoutRunnable)
                 currentState = State.IDLE
             }
         }
@@ -190,17 +191,11 @@ class BluetoothHidService : Service() {
     @SuppressLint("MissingPermission")
     private fun registerApp() {
         val hid = hidDevice ?: run { currentState = State.ERROR; return }
-        // Unregister any leftover registration from a previous crash/session before re-registering.
-        // This clears stale HID app state that prevents new registration on some devices.
-        try { hid.unregisterApp() } catch (_: Exception) {}
-        mainHandler.postDelayed({
-            val hid2 = hidDevice ?: run { currentState = State.ERROR; return@postDelayed }
-            val qos = BluetoothHidDeviceAppQosSettings(
-                BluetoothHidDeviceAppQosSettings.SERVICE_BEST_EFFORT,
-                800, 9, 0, 11250, BluetoothHidDeviceAppQosSettings.MAX
-            )
-            hid2.registerApp(GamepadHidDescriptor.buildSdpSettings(), null, qos, executor, hidCallback)
-        }, 400)
+        val qos = BluetoothHidDeviceAppQosSettings(
+            BluetoothHidDeviceAppQosSettings.SERVICE_BEST_EFFORT,
+            800, 9, 0, 11250, BluetoothHidDeviceAppQosSettings.MAX
+        )
+        hid.registerApp(GamepadHidDescriptor.buildSdpSettings(), null, qos, executor, hidCallback)
     }
 
     private fun requestDiscoverable() {

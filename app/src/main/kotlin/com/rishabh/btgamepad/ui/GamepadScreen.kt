@@ -94,7 +94,7 @@ fun GamepadScreen(viewModel: GamepadViewModel) {
             val shGap   = (6f   * scale).dp
             val shRowW  = shSz * 2f + shGap   // Xbox shoulder row width
             val faceCrossH = btnSz * 3f        // face cross total height (3 buttons tall)
-            val margin  = W * 0.025f
+            val margin  = W * 0.05f
 
             if (layout == LayoutMode.XBOX) {
                 // ── Xbox layout ─────────────────────────────────────────────
@@ -111,7 +111,8 @@ fun GamepadScreen(viewModel: GamepadViewModel) {
                 // DPad is in the left half, vertically centered — doesn't conflict with
                 // left shoulder row since they're at the same x but DPad is positioned lower.
                 val dpadX = margin + shSz * 0.15f
-                val dpadY = shY + shSz + (H - shSz - dpadSz - stickD) * 0.3f
+                val dpadBaseY = shY + shSz + 4.dp
+                val dpadY = dpadBaseY + ((H - dpadBaseY - dpadSz - stickD) * 0.3f).coerceAtLeast(0.dp)
 
                 // Face buttons start just below the right shoulder row.
                 val faceY = shY + shSz + 8.dp
