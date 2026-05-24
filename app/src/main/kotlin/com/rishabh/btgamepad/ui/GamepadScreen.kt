@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -358,9 +359,9 @@ private fun ToggleChip(label: String, selected: Boolean, onClick: () -> Unit) {
     ) { Text(label, fontSize = 12.sp) }
 }
 
-// ── absoluteOffset extension (Dp arithmetic with BoxWithConstraints values) ───
-private fun Modifier.absoluteOffset(x: androidx.compose.ui.unit.Dp, y: androidx.compose.ui.unit.Dp) =
-    this.then(androidx.compose.foundation.layout.offset(x = x, y = y))
+// Dp-based offset (non-composable form of Modifier.offset)
+private fun Modifier.absoluteOffset(x: androidx.compose.ui.unit.Dp, y: androidx.compose.ui.unit.Dp): Modifier =
+    this.offset(x = x, y = y)
 
 private fun statusText(state: BluetoothHidService.State) = when (state) {
     BluetoothHidService.State.IDLE             -> "Idle"
