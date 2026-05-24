@@ -130,7 +130,7 @@ class BluetoothHidService : Service() {
         startForeground(NOTIFICATION_ID, buildNotification("Starting…"))
         registerReceiver(btStateReceiver, IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED))
         // Delay first attempt — BT profile services may not be ready immediately on startup
-        mainHandler.postDelayed({ registerHidProfile() }, 3000)
+        mainHandler.postDelayed({ registerHidProfile() }, 1500)
     }
 
     override fun onBind(intent: Intent?): IBinder = binder
@@ -191,11 +191,20 @@ class BluetoothHidService : Service() {
     @SuppressLint("MissingPermission")
     private fun registerApp() {
         val hid = hidDevice ?: run { currentState = State.ERROR; return }
-        val qos = BluetoothHidDeviceAppQosSettings(
-            BluetoothHidDeviceAppQosSettings.SERVICE_BEST_EFFORT,
-            800, 9, 0, 11250, BluetoothHidDeviceAppQosSettings.MAX
-        )
-        hid.registerApp(GamepadHidDescriptor.buildSdpSettings(), null, qos, executor, hidCallback)
+        // Clear any stale app registration from a previous crash/session.
+        // onAppStatusChanged(false) fires here but is ignored while in REGISTERING state.
+        try { hid.unregisterApp() } catch (_: Exception) {}
+        mainHandler.postDelayed({
+            val hid2 = hidDevice ?: run { currentState = State.ERROR; return@postDelayed }
+            val btName = try {
+                getSystemService(BluetoothManager::class.java).adapter?.name?.takeIf { it.isNotBlank() } ?: "Android"
+            } catch (_: Exception) { "Android" }
+            val qos = BluetoothHidDeviceAppQosSettings(
+                BluetoothHidDeviceAppQosSettings.SERVICE_BEST_EFFORT,
+                800, 9, 0, 11250, BluetoothHidDeviceAppQosSettings.MAX
+            )
+            hid2.registerApp(GamepadHidDescriptor.buildSdpSettings("$btName Controller"), null, qos, executor, hidCallback)
+        }, 500)
     }
 
     private fun requestDiscoverable() {

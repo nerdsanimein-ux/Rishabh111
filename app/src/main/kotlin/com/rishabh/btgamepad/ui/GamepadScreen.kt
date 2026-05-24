@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
@@ -54,6 +55,7 @@ fun GamepadScreen(viewModel: GamepadViewModel) {
     val context      = LocalContext.current
 
     Box(Modifier.fillMaxSize().background(BG)) {
+      Box(Modifier.fillMaxSize().safeDrawingPadding()) {
 
         // ── Status bar ───────────────────────────────────────────────────────
         Row(
@@ -91,8 +93,7 @@ fun GamepadScreen(viewModel: GamepadViewModel) {
             val dpadSz  = (140f * scale).dp   // DPad cross total size
             val btnSz   = (62f  * scale).dp   // face button diameter
             val stickD  = (120f * scale).dp   // analog stick base diameter
-            val shGap   = (6f   * scale).dp
-            val shRowW  = shSz * 2f + shGap   // Xbox shoulder row width
+            val shRowW  = shSz * 2f + 6.dp    // 6.dp matches ShoulderButtons' internal gap
             val faceCrossH = btnSz * 3f        // face cross total height (3 buttons tall)
             val margin  = W * 0.05f
 
@@ -239,6 +240,7 @@ fun GamepadScreen(viewModel: GamepadViewModel) {
         if (showSettings) {
             SettingsOverlay(layout, viewModel::setLayoutMode, viewModel::toggleSettings)
         }
+      } // end safeDrawingPadding box
     }
 }
 

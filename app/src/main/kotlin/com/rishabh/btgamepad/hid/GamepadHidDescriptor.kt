@@ -88,11 +88,11 @@ object GamepadHidDescriptor {
         0xC0.toByte()                  // End Collection
     )
 
-    fun buildSdpSettings(): BluetoothHidDeviceAppSdpSettings =
+    fun buildSdpSettings(name: String = "Android Controller"): BluetoothHidDeviceAppSdpSettings =
         BluetoothHidDeviceAppSdpSettings(
-            "Android Gamepad",
-            "Virtual Gamepad via BluetoothHidDevice",
-            "Rishabh",
+            name,
+            "Bluetooth HID Gamepad",
+            "Android",
             BluetoothHidDevice.SUBCLASS2_GAMEPAD,
             DESCRIPTOR
         )
