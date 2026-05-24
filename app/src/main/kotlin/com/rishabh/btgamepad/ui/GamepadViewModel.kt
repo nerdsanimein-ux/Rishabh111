@@ -18,10 +18,16 @@ enum class LayoutMode { XBOX, PLAYSTATION }
 
 class GamepadViewModel(application: Application) : AndroidViewModel(application) {
 
-    val connectionState = MutableLiveData(BluetoothHidService.State.IDLE)
-    val layoutMode = MutableLiveData(LayoutMode.XBOX)
-    val controlScale = MutableLiveData(1.0f)
-    val showSettings = MutableLiveData(false)
+    val connectionState  = MutableLiveData(BluetoothHidService.State.IDLE)
+    val layoutMode       = MutableLiveData(LayoutMode.XBOX)
+    val showSettings     = MutableLiveData(false)
+    val permissionDenied = MutableLiveData(false)
+
+    // Per-group size scales
+    val stickScale    = MutableLiveData(1.0f)
+    val dpadScale     = MutableLiveData(1.0f)
+    val buttonScale   = MutableLiveData(1.0f)
+    val shoulderScale = MutableLiveData(1.0f)
 
     private var hidService: BluetoothHidService? = null
     private var reportBuilder: HidReportBuilder? = null
@@ -42,7 +48,6 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
 
     fun bindService(context: Context) {
         val intent = Intent(context, BluetoothHidService::class.java)
-        context.startForegroundService(intent)
         context.bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
     }
 
@@ -50,9 +55,11 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
         context.unbindService(serviceConnection)
     }
 
-    fun retryConnection() {
-        hidService?.retry()
+    fun onPermissionDenied() {
+        permissionDenied.value = true
     }
+
+    fun retryConnection() { hidService?.retry() }
 
     fun openBluetoothSettings(context: Context) {
         context.startActivity(
@@ -60,12 +67,13 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
         )
     }
 
-    fun toggleSettings() {
-        showSettings.value = !(showSettings.value ?: false)
-    }
-
+    fun toggleSettings() { showSettings.value = !(showSettings.value ?: false) }
     fun setLayoutMode(mode: LayoutMode) { layoutMode.value = mode }
-    fun setScale(scale: Float) { controlScale.value = scale.coerceIn(0.6f, 1.6f) }
+
+    fun setStickScale(v: Float)    { stickScale.value    = v.coerceIn(0.5f, 1.8f) }
+    fun setDpadScale(v: Float)     { dpadScale.value     = v.coerceIn(0.5f, 1.8f) }
+    fun setButtonScale(v: Float)   { buttonScale.value   = v.coerceIn(0.5f, 1.8f) }
+    fun setShoulderScale(v: Float) { shoulderScale.value = v.coerceIn(0.5f, 1.8f) }
 
     // ---- Input events ----
 

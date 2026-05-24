@@ -4,7 +4,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -17,57 +20,57 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-enum class ShoulderSide { LEFT, RIGHT }
-
-private val COLOR_TRIGGER = Color(0xFF1565C0) // L2 / R2 — deep blue trigger
-private val COLOR_BUMPER  = Color(0xFF1E88E5) // L1 / R1 — brighter blue bumper
-
 @Composable
-fun ShoulderButtons(
-    side: ShoulderSide,
-    scale: Float = 1f,
-    onL1: ((Boolean) -> Unit)? = null,
-    onL2: ((Boolean) -> Unit)? = null,
-    onR1: ((Boolean) -> Unit)? = null,
-    onR2: ((Boolean) -> Unit)? = null,
+fun CenterButtons(
+    onSelect: (Boolean) -> Unit,
+    onStart: (Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(3.dp)) {
-        if (side == ShoulderSide.LEFT) {
-            ShoulderKey("L2", scale, COLOR_TRIGGER, onL2)
-            ShoulderKey("L1", scale, COLOR_BUMPER,  onL1)
-        } else {
-            ShoulderKey("R2", scale, COLOR_TRIGGER, onR2)
-            ShoulderKey("R1", scale, COLOR_BUMPER,  onR1)
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            PillButton("SELECT", onSelect)
+            PillButton("START", onStart)
         }
+        HomeIndicator()
     }
 }
 
 @Composable
-private fun ShoulderKey(
-    label: String,
-    scale: Float,
-    color: Color,
-    onPressed: ((Boolean) -> Unit)?
-) {
+private fun PillButton(label: String, onPressed: (Boolean) -> Unit) {
     val haptic = LocalHapticFeedback.current
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier
-            .size(width = (76 * scale).dp, height = (32 * scale).dp)
-            .background(color, RoundedCornerShape(8.dp))
+            .background(Color(0xFF2D3748), RoundedCornerShape(12.dp))
             .pointerInput(Unit) {
                 awaitPointerEventScope {
                     while (true) {
                         val event = awaitPointerEvent()
                         val pressed = event.changes.any { it.pressed }
                         if (pressed) haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        onPressed?.invoke(pressed)
+                        onPressed(pressed)
                         event.changes.forEach { it.consume() }
                     }
                 }
             }
+            .padding(horizontal = 12.dp, vertical = 7.dp)
     ) {
-        Text(label, color = Color.White, fontSize = (12 * scale).sp)
+        Text(label, color = Color(0xFFB0BEC5), fontSize = 10.sp)
+    }
+}
+
+@Composable
+private fun HomeIndicator() {
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .size(22.dp)
+            .background(Color(0xFF3D4A5C), CircleShape)
+    ) {
+        Text("⊙", color = Color(0xFF78909C), fontSize = 12.sp)
     }
 }

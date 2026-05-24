@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -19,7 +20,10 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.rishabh.btgamepad.hid.HidConstants
+
+private val DPAD_COLOR = Color(0xFF283593) // indigo
 
 @Composable
 fun DPad(
@@ -27,7 +31,7 @@ fun DPad(
     scale: Float = 1f,
     modifier: Modifier = Modifier
 ) {
-    val btnSize = (44 * scale).dp
+    val btnSize = (46 * scale).dp
     var up    by remember { mutableStateOf(false) }
     var down  by remember { mutableStateOf(false) }
     var left  by remember { mutableStateOf(false) }
@@ -49,13 +53,13 @@ fun DPad(
     }
 
     Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        DPadKey("▲", btnSize, { up = true; recompute() },    { up = false; recompute() })
+        DPadKey("▲", btnSize, { up = true; recompute() }, { up = false; recompute() })
         Row {
-            DPadKey("◀", btnSize, { left = true; recompute() },  { left = false; recompute() })
+            DPadKey("◀", btnSize, { left = true; recompute() }, { left = false; recompute() })
             Spacer(Modifier.size(btnSize))
             DPadKey("▶", btnSize, { right = true; recompute() }, { right = false; recompute() })
         }
-        DPadKey("▼", btnSize, { down = true; recompute() },  { down = false; recompute() })
+        DPadKey("▼", btnSize, { down = true; recompute() }, { down = false; recompute() })
     }
 }
 
@@ -71,7 +75,7 @@ private fun DPadKey(
         contentAlignment = Alignment.Center,
         modifier = Modifier
             .size(size)
-            .background(Color(0xFF424242))
+            .background(DPAD_COLOR, RoundedCornerShape(6.dp))
             .pointerInput(Unit) {
                 awaitPointerEventScope {
                     while (true) {
@@ -87,6 +91,6 @@ private fun DPadKey(
                 }
             }
     ) {
-        Text(label, color = Color.White)
+        Text(label, color = Color.White, fontSize = (14 * (size.value / 46f)).sp)
     }
 }

@@ -17,40 +17,40 @@ import com.rishabh.btgamepad.ui.theme.BtGamepadTheme
 class MainActivity : ComponentActivity() {
 
     private val viewModel: GamepadViewModel by viewModels()
+    private var serviceBound = false
 
     private val permissionLauncher = BluetoothPermissionHandler.createLauncher(this) { granted ->
-        if (granted) startHidService()
+        if (granted) bindHidService()
+        else viewModel.onPermissionDenied()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableFullScreen()
-
-        if (BluetoothPermissionHandler.allGranted(this)) {
-            startHidService()
-        } else {
-            permissionLauncher.launch(BluetoothPermissionHandler.requiredPermissions())
-        }
-
-        setContent {
-            BtGamepadTheme {
-                GamepadScreen(viewModel = viewModel)
-            }
-        }
+        setContent { BtGamepadTheme { GamepadScreen(viewModel = viewModel) } }
     }
 
     override fun onStart() {
         super.onStart()
-        viewModel.bindService(this)
+        when {
+            !BluetoothPermissionHandler.allGranted(this) ->
+                permissionLauncher.launch(BluetoothPermissionHandler.requiredPermissions())
+            !serviceBound -> bindHidService()
+        }
     }
 
     override fun onStop() {
         super.onStop()
-        viewModel.unbindService(this)
+        if (serviceBound) {
+            viewModel.unbindService(this)
+            serviceBound = false
+        }
     }
 
-    private fun startHidService() {
+    private fun bindHidService() {
         startForegroundService(Intent(this, BluetoothHidService::class.java))
+        viewModel.bindService(this)
+        serviceBound = true
     }
 
     private fun enableFullScreen() {

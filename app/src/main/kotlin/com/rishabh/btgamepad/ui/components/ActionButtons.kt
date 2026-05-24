@@ -19,6 +19,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.rishabh.btgamepad.ui.LayoutMode
 
+// Xbox: A=green B=red X=blue Y=yellow
+// PlayStation: ×=blue ○=red □=pink △=green
+private val CLR_GREEN  = Color(0xFF00E676)
+private val CLR_RED    = Color(0xFFFF1744)
+private val CLR_BLUE   = Color(0xFF2979FF)
+private val CLR_YELLOW = Color(0xFFFFD600)
+private val CLR_PINK   = Color(0xFFFF4081)
+
 @Composable
 fun ActionButtons(
     layout: LayoutMode,
@@ -29,14 +37,12 @@ fun ActionButtons(
     onY: (Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val btnSize = (52 * scale).dp
+    val btnSize = (50 * scale).dp
 
-    // Xbox:        A=green  B=red    X=blue   Y=yellow
-    // PlayStation: ×=blue   ○=red    □=pink   △=green
-    val (topLabel, topColor)    = if (layout == LayoutMode.XBOX) "Y" to Color(0xFFFFEB3B) else "△" to Color(0xFF4CAF50)
-    val (leftLabel, leftColor)  = if (layout == LayoutMode.XBOX) "X" to Color(0xFF2196F3) else "□" to Color(0xFFE91E8C)
-    val (rightLabel, rightColor)= if (layout == LayoutMode.XBOX) "B" to Color(0xFFF44336) else "○" to Color(0xFFF44336)
-    val (botLabel, botColor)    = if (layout == LayoutMode.XBOX) "A" to Color(0xFF4CAF50) else "×" to Color(0xFF2196F3)
+    val (topLabel, topColor)   = if (layout == LayoutMode.XBOX) "Y" to CLR_YELLOW else "△" to CLR_GREEN
+    val (leftLabel, leftColor) = if (layout == LayoutMode.XBOX) "X" to CLR_BLUE   else "□" to CLR_PINK
+    val (rightLabel, rightColor) = if (layout == LayoutMode.XBOX) "B" to CLR_RED  else "○" to CLR_RED
+    val (botLabel, botColor)   = if (layout == LayoutMode.XBOX) "A" to CLR_GREEN  else "×" to CLR_BLUE
 
     Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         FaceButton(topLabel, topColor, btnSize, onY)
@@ -74,9 +80,6 @@ private fun FaceButton(
                 }
             }
     ) {
-        Text(label, color = Color.White, fontSize = (16 * scale(size)).sp)
+        Text(label, color = Color.White, fontSize = (15 * (size.value / 50f)).sp)
     }
 }
-
-// Helper to derive a relative font scale from button size dp value
-private fun scale(size: androidx.compose.ui.unit.Dp): Float = (size.value / 52f).coerceIn(0.5f, 2f)

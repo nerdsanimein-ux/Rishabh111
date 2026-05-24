@@ -4,14 +4,17 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -23,6 +26,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
@@ -33,255 +37,337 @@ import androidx.compose.ui.unit.sp
 import com.rishabh.btgamepad.hid.BluetoothHidService
 import com.rishabh.btgamepad.ui.components.ActionButtons
 import com.rishabh.btgamepad.ui.components.AnalogStick
+import com.rishabh.btgamepad.ui.components.CenterButtons
 import com.rishabh.btgamepad.ui.components.DPad
 import com.rishabh.btgamepad.ui.components.ShoulderButtons
 import com.rishabh.btgamepad.ui.components.ShoulderSide
 
+private val BG_TOP    = Color(0xFF0D1117)
+private val BG_BOTTOM = Color(0xFF0A0E1A)
+private val ACCENT    = Color(0xFF3D5AFE)
+
 @Composable
 fun GamepadScreen(viewModel: GamepadViewModel) {
-    val state by viewModel.connectionState.observeAsState(BluetoothHidService.State.IDLE)
-    val layout by viewModel.layoutMode.observeAsState(LayoutMode.XBOX)
-    val scale by viewModel.controlScale.observeAsState(1.0f)
-    val showSettings by viewModel.showSettings.observeAsState(false)
+    val state         by viewModel.connectionState.observeAsState(BluetoothHidService.State.IDLE)
+    val layout        by viewModel.layoutMode.observeAsState(LayoutMode.XBOX)
+    val showSettings  by viewModel.showSettings.observeAsState(false)
+    val permDenied    by viewModel.permissionDenied.observeAsState(false)
+    val stickScale    by viewModel.stickScale.observeAsState(1f)
+    val dpadScale     by viewModel.dpadScale.observeAsState(1f)
+    val buttonScale   by viewModel.buttonScale.observeAsState(1f)
+    val shoulderScale by viewModel.shoulderScale.observeAsState(1f)
     val context = LocalContext.current
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF1A1A1A))
+            .background(Brush.verticalGradient(listOf(BG_TOP, BG_BOTTOM)))
     ) {
-        // ---- Status bar ----
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .align(Alignment.TopCenter)
-                .padding(horizontal = 12.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            StatusDot(state)
-            Text(
-                text = statusText(state),
-                color = statusColor(state),
-                fontSize = 12.sp
-            )
-            // Settings gear button
-            SystemButton("⚙", { pressed -> if (!pressed) viewModel.toggleSettings() })
-        }
+        Column(Modifier.fillMaxSize()) {
 
-        // ---- Bluetooth OFF banner ----
-        if (state == BluetoothHidService.State.BLUETOOTH_OFF) {
-            Column(
-                modifier = Modifier.align(Alignment.Center),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text("Bluetooth is OFF", color = Color(0xFFF44336), fontSize = 18.sp)
-                Spacer(Modifier.height(12.dp))
-                Button(
-                    onClick = { viewModel.openBluetoothSettings(context) },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2196F3))
-                ) { Text("Open Bluetooth Settings") }
-                Spacer(Modifier.height(8.dp))
-                Text("App will reconnect automatically when Bluetooth turns ON",
-                    color = Color(0xFF9E9E9E), fontSize = 11.sp)
-            }
-        }
-
-        // ---- Error banner ----
-        if (state == BluetoothHidService.State.ERROR) {
-            Column(
-                modifier = Modifier.align(Alignment.Center),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text("Bluetooth HID Error", color = Color(0xFFF44336), fontSize = 18.sp)
-                Spacer(Modifier.height(12.dp))
-                Button(onClick = { viewModel.retryConnection() }) { Text("Retry") }
-            }
-        }
-
-        // ---- Main gamepad UI ----
-        if (state != BluetoothHidService.State.BLUETOOTH_OFF &&
-            state != BluetoothHidService.State.ERROR) {
-
-            // Shoulder buttons
+            // ── Status bar ──────────────────────────────────────────────────
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .align(Alignment.TopCenter)
-                    .padding(top = 28.dp, start = 8.dp, end = 8.dp),
+                    .padding(horizontal = 12.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Box(Modifier.size(8.dp).background(statusColor(state), CircleShape))
+                    Text(statusText(state), color = statusColor(state), fontSize = 11.sp)
+                }
+                GearButton { viewModel.toggleSettings() }
+            }
+
+            // ── Shoulder row ─────────────────────────────────────────────────
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 6.dp),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 ShoulderButtons(
-                    side = ShoulderSide.LEFT, scale = scale,
+                    side = ShoulderSide.LEFT, scale = shoulderScale,
                     onL1 = viewModel::onL1Button, onL2 = viewModel::onL2Button
                 )
                 ShoulderButtons(
-                    side = ShoulderSide.RIGHT, scale = scale,
+                    side = ShoulderSide.RIGHT, scale = shoulderScale,
                     onR1 = viewModel::onR1Button, onR2 = viewModel::onR2Button
                 )
             }
 
-            // Center row
+            Spacer(Modifier.height(4.dp))
+
+            // ── Main controller row ───────────────────────────────────────────
             Row(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .align(Alignment.Center),
-                horizontalArrangement = Arrangement.SpaceEvenly,
+                    .fillMaxSize()
+                    .padding(horizontal = 6.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                DPad(onDirectionChange = viewModel::onDpadChange, scale = scale)
-
+                // Left column: DPad (top) + Left Stick (bottom)
                 Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight(),
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    verticalArrangement = Arrangement.SpaceEvenly
                 ) {
-                    SystemButton("SELECT", viewModel::onSelectButton)
-                    SystemButton("START", viewModel::onStartButton)
+                    DPad(
+                        onDirectionChange = viewModel::onDpadChange,
+                        scale = dpadScale
+                    )
+                    AnalogStick(
+                        label = "L",
+                        scale = stickScale,
+                        onMove = viewModel::onLeftStickMove
+                    )
                 }
 
-                ActionButtons(
-                    layout = layout, scale = scale,
-                    onA = viewModel::onAButton, onB = viewModel::onBButton,
-                    onX = viewModel::onXButton, onY = viewModel::onYButton
-                )
-            }
+                // Center column: system buttons
+                Column(
+                    modifier = Modifier
+                        .weight(0.55f)
+                        .fillMaxHeight(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    CenterButtons(
+                        onSelect = viewModel::onSelectButton,
+                        onStart = viewModel::onStartButton
+                    )
+                }
 
-            // Analog sticks
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 12.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly
-            ) {
-                AnalogStick(label = "L", scale = scale, onMove = viewModel::onLeftStickMove)
-                AnalogStick(label = "R", scale = scale, onMove = viewModel::onRightStickMove)
+                // Right column: Action buttons (top) + Right Stick (bottom)
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    ActionButtons(
+                        layout = layout, scale = buttonScale,
+                        onA = viewModel::onAButton, onB = viewModel::onBButton,
+                        onX = viewModel::onXButton, onY = viewModel::onYButton
+                    )
+                    AnalogStick(
+                        label = "R",
+                        scale = stickScale,
+                        onMove = viewModel::onRightStickMove
+                    )
+                }
             }
         }
 
-        // ---- Settings overlay ----
+        // ── Bluetooth OFF overlay ─────────────────────────────────────────────
+        if (state == BluetoothHidService.State.BLUETOOTH_OFF) {
+            StatusOverlay {
+                Text("Bluetooth is OFF", color = Color(0xFFFF5252), fontSize = 18.sp)
+                Spacer(Modifier.height(12.dp))
+                Button(
+                    onClick = { viewModel.openBluetoothSettings(context) },
+                    colors = ButtonDefaults.buttonColors(containerColor = ACCENT)
+                ) { Text("Open Bluetooth Settings") }
+                Spacer(Modifier.height(6.dp))
+                Text("App reconnects automatically when Bluetooth turns ON",
+                    color = Color(0xFF607D8B), fontSize = 11.sp)
+            }
+        }
+
+        // ── Permission denied overlay ─────────────────────────────────────────
+        if (permDenied) {
+            StatusOverlay {
+                Text("Bluetooth Permission Required", color = Color(0xFFFF5252), fontSize = 16.sp)
+                Spacer(Modifier.height(12.dp))
+                Button(
+                    onClick = { viewModel.openBluetoothSettings(context) },
+                    colors = ButtonDefaults.buttonColors(containerColor = ACCENT)
+                ) { Text("Open Settings") }
+            }
+        }
+
+        // ── Error overlay ─────────────────────────────────────────────────────
+        if (state == BluetoothHidService.State.ERROR && !permDenied) {
+            StatusOverlay {
+                Text("HID Registration Failed", color = Color(0xFFFF5252), fontSize = 16.sp)
+                Spacer(Modifier.height(8.dp))
+                Text("Make sure Bluetooth is ON and try again.",
+                    color = Color(0xFF90A4AE), fontSize = 12.sp)
+                Spacer(Modifier.height(12.dp))
+                Button(
+                    onClick = { viewModel.retryConnection() },
+                    colors = ButtonDefaults.buttonColors(containerColor = ACCENT)
+                ) { Text("Retry") }
+            }
+        }
+
+        // ── Settings overlay ──────────────────────────────────────────────────
         if (showSettings) {
             SettingsOverlay(
                 layout = layout,
-                scale = scale,
+                stickScale = stickScale, dpadScale = dpadScale,
+                buttonScale = buttonScale, shoulderScale = shoulderScale,
                 onLayoutChange = viewModel::setLayoutMode,
-                onScaleChange = viewModel::setScale,
+                onStickScale = viewModel::setStickScale,
+                onDpadScale = viewModel::setDpadScale,
+                onButtonScale = viewModel::setButtonScale,
+                onShoulderScale = viewModel::setShoulderScale,
                 onClose = viewModel::toggleSettings
             )
         }
     }
 }
 
+// ── Shared status overlay ──────────────────────────────────────────────────────
 @Composable
-private fun StatusDot(state: BluetoothHidService.State) {
+private fun StatusOverlay(content: @Composable ColumnScope.() -> Unit) {
     Box(
         modifier = Modifier
-            .size(8.dp)
-            .background(statusColor(state), RoundedCornerShape(50))
-    )
+            .fillMaxSize()
+            .background(Color(0xDD000000)),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            content = content
+        )
+    }
 }
 
-private fun statusText(state: BluetoothHidService.State) = when (state) {
-    BluetoothHidService.State.IDLE            -> "Idle"
-    BluetoothHidService.State.BLUETOOTH_OFF   -> "Bluetooth OFF"
-    BluetoothHidService.State.REGISTERING     -> "Registering HID…"
-    BluetoothHidService.State.WAITING_FOR_HOST -> "Waiting for PC…"
-    BluetoothHidService.State.CONNECTED       -> "Connected ✓"
-    BluetoothHidService.State.ERROR           -> "Error"
-}
-
-private fun statusColor(state: BluetoothHidService.State) = when (state) {
-    BluetoothHidService.State.CONNECTED       -> Color(0xFF4CAF50)
-    BluetoothHidService.State.WAITING_FOR_HOST -> Color(0xFFFFEB3B)
-    BluetoothHidService.State.BLUETOOTH_OFF,
-    BluetoothHidService.State.ERROR           -> Color(0xFFF44336)
-    else                                      -> Color(0xFF9E9E9E)
-}
-
+// ── Gear / settings button ────────────────────────────────────────────────────
 @Composable
-fun SystemButton(label: String, onPressed: (Boolean) -> Unit) {
+private fun GearButton(onClick: () -> Unit) {
     val haptic = LocalHapticFeedback.current
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier
-            .background(Color(0xFF424242), RoundedCornerShape(6.dp))
+            .size(28.dp)
+            .background(Color(0xFF1E2A3A), CircleShape)
             .pointerInput(Unit) {
                 awaitPointerEventScope {
                     while (true) {
                         val event = awaitPointerEvent()
                         val pressed = event.changes.any { it.pressed }
-                        if (pressed) haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        onPressed(pressed)
+                        if (!pressed) {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onClick()
+                        }
                         event.changes.forEach { it.consume() }
                     }
                 }
             }
-            .padding(horizontal = 14.dp, vertical = 8.dp)
     ) {
-        Text(label, color = Color.White, fontSize = 11.sp)
+        Text("⚙", color = Color(0xFF78909C), fontSize = 14.sp)
     }
 }
 
+// ── Settings overlay ───────────────────────────────────────────────────────────
 @Composable
 private fun SettingsOverlay(
     layout: LayoutMode,
-    scale: Float,
+    stickScale: Float, dpadScale: Float,
+    buttonScale: Float, shoulderScale: Float,
     onLayoutChange: (LayoutMode) -> Unit,
-    onScaleChange: (Float) -> Unit,
+    onStickScale: (Float) -> Unit,
+    onDpadScale: (Float) -> Unit,
+    onButtonScale: (Float) -> Unit,
+    onShoulderScale: (Float) -> Unit,
     onClose: () -> Unit
 ) {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xCC000000))
+            .background(Color(0xE5000000)),
+        contentAlignment = Alignment.Center
     ) {
         Column(
             modifier = Modifier
-                .align(Alignment.Center)
-                .background(Color(0xFF2A2A2A), RoundedCornerShape(12.dp))
+                .background(Color(0xFF161B27), RoundedCornerShape(16.dp))
                 .padding(24.dp)
-                .width(320.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+                .width(340.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             Text("Settings", color = Color.White, fontSize = 18.sp)
 
-            // Layout toggle
-            Text("Controller Layout", color = Color(0xFF9E9E9E), fontSize = 12.sp)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                LayoutToggleButton("Xbox", layout == LayoutMode.XBOX) {
-                    onLayoutChange(LayoutMode.XBOX)
-                }
-                LayoutToggleButton("PlayStation", layout == LayoutMode.PLAYSTATION) {
-                    onLayoutChange(LayoutMode.PLAYSTATION)
-                }
+            // Controller layout toggle
+            SectionLabel("Controller Layout")
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                ToggleChip("Xbox",        layout == LayoutMode.XBOX)        { onLayoutChange(LayoutMode.XBOX) }
+                ToggleChip("PlayStation", layout == LayoutMode.PLAYSTATION) { onLayoutChange(LayoutMode.PLAYSTATION) }
             }
 
-            // Size slider
-            Text("Control Size: ${(scale * 100).toInt()}%",
-                color = Color(0xFF9E9E9E), fontSize = 12.sp)
-            Slider(
-                value = scale,
-                onValueChange = onScaleChange,
-                valueRange = 0.6f..1.6f,
-                colors = SliderDefaults.colors(thumbColor = Color(0xFF4CAF50),
-                    activeTrackColor = Color(0xFF4CAF50))
-            )
+            // Per-group size sliders
+            SectionLabel("Analog Sticks — ${pct(stickScale)}")
+            ScaleSlider(stickScale, onStickScale)
+
+            SectionLabel("D-Pad — ${pct(dpadScale)}")
+            ScaleSlider(dpadScale, onDpadScale)
+
+            SectionLabel("Face Buttons — ${pct(buttonScale)}")
+            ScaleSlider(buttonScale, onButtonScale)
+
+            SectionLabel("Shoulder Buttons — ${pct(shoulderScale)}")
+            ScaleSlider(shoulderScale, onShoulderScale)
 
             Button(
                 onClick = onClose,
                 modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF424242))
-            ) { Text("Close") }
+                colors = ButtonDefaults.buttonColors(containerColor = ACCENT)
+            ) { Text("Done") }
         }
     }
 }
 
 @Composable
-private fun LayoutToggleButton(label: String, selected: Boolean, onClick: () -> Unit) {
+private fun SectionLabel(text: String) {
+    Text(text, color = Color(0xFF78909C), fontSize = 11.sp)
+}
+
+@Composable
+private fun ScaleSlider(value: Float, onChange: (Float) -> Unit) {
+    Slider(
+        value = value,
+        onValueChange = onChange,
+        valueRange = 0.5f..1.8f,
+        colors = SliderDefaults.colors(
+            thumbColor = ACCENT,
+            activeTrackColor = ACCENT,
+            inactiveTrackColor = Color(0xFF2D3748)
+        )
+    )
+}
+
+@Composable
+private fun ToggleChip(label: String, selected: Boolean, onClick: () -> Unit) {
     Button(
         onClick = onClick,
         colors = ButtonDefaults.buttonColors(
-            containerColor = if (selected) Color(0xFF4CAF50) else Color(0xFF424242)
-        )
+            containerColor = if (selected) ACCENT else Color(0xFF2D3748)
+        ),
+        shape = RoundedCornerShape(8.dp)
     ) { Text(label, fontSize = 12.sp) }
+}
+
+private fun pct(scale: Float) = "${(scale * 100).toInt()}%"
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+private fun statusText(state: BluetoothHidService.State) = when (state) {
+    BluetoothHidService.State.IDLE             -> "Idle"
+    BluetoothHidService.State.BLUETOOTH_OFF    -> "Bluetooth OFF"
+    BluetoothHidService.State.REGISTERING      -> "Registering HID…"
+    BluetoothHidService.State.WAITING_FOR_HOST -> "Waiting for PC…"
+    BluetoothHidService.State.CONNECTED        -> "Connected ✓"
+    BluetoothHidService.State.ERROR            -> "Error"
+}
+
+private fun statusColor(state: BluetoothHidService.State) = when (state) {
+    BluetoothHidService.State.CONNECTED        -> Color(0xFF00E676)
+    BluetoothHidService.State.WAITING_FOR_HOST -> Color(0xFFFFD600)
+    BluetoothHidService.State.BLUETOOTH_OFF,
+    BluetoothHidService.State.ERROR            -> Color(0xFFFF5252)
+    BluetoothHidService.State.REGISTERING      -> Color(0xFF40C4FF)
+    else                                       -> Color(0xFF607D8B)
 }

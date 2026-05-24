@@ -21,7 +21,11 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import kotlin.math.sqrt
+
+private val COLOR_BASE  = Color(0xFF1A2035)
+private val COLOR_THUMB = Color(0xFF3D5AFE) // vivid indigo thumb
 
 @Composable
 fun AnalogStick(
@@ -30,25 +34,22 @@ fun AnalogStick(
     onMove: (x: Float, y: Float) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val baseRadius = (56 * scale).dp
+    val baseRadius  = (54 * scale).dp
     val thumbRadius = (20 * scale).dp
     var thumbOffset by remember { mutableStateOf(Offset.Zero) }
     val haptic = LocalHapticFeedback.current
-    var wasDragging by remember { mutableStateOf(false) }
 
     Box(
         modifier = modifier
             .size(baseRadius * 2)
-            .background(Color(0xFF2E2E2E), CircleShape)
+            .background(COLOR_BASE, CircleShape)
             .pointerInput(Unit) {
                 val maxPx = baseRadius.toPx() - thumbRadius.toPx()
                 detectDragGestures(
                     onDragStart = {
-                        wasDragging = true
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                     },
                     onDragEnd = {
-                        wasDragging = false
                         thumbOffset = Offset.Zero
                         onMove(0f, 0f)
                     },
@@ -68,8 +69,8 @@ fun AnalogStick(
             modifier = Modifier
                 .size(thumbRadius * 2)
                 .offset { IntOffset(thumbOffset.x.toInt(), thumbOffset.y.toInt()) }
-                .background(Color(0xFF9E9E9E), CircleShape)
+                .background(COLOR_THUMB, CircleShape)
         )
-        Text(label, color = Color.White)
+        Text(label, color = Color(0x88FFFFFF), fontSize = (11 * scale).sp)
     }
 }
