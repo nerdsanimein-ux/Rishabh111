@@ -21,6 +21,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import com.rishabh.btgamepad.hid.HidConstants
@@ -46,9 +47,9 @@ private class CrossShape : Shape {
 @Composable
 fun DPad(
     onDirectionChange: (Byte) -> Unit,
+    size: Dp = 140.dp,
     modifier: Modifier = Modifier
 ) {
-    val size = 150.dp
     val haptic = LocalHapticFeedback.current
 
     Box(
@@ -56,7 +57,7 @@ fun DPad(
             .size(size)
             .clip(CrossShape())
             .background(DPAD_COLOR)
-            .pointerInput(Unit) {
+            .pointerInput(size) {
                 val sizePx = size.toPx()
                 var lastDir: Byte = HidConstants.DPAD_CENTERED
                 awaitPointerEventScope {
@@ -100,10 +101,7 @@ fun DPad(
                 rotate(rot, pivot = Offset(acx, acy)) {
                     val hw = arrowSz * 0.5f; val hh = arrowSz * 0.4f
                     val path = Path().apply {
-                        moveTo(acx, acy - hh)
-                        lineTo(acx + hw, acy + hh)
-                        lineTo(acx - hw, acy + hh)
-                        close()
+                        moveTo(acx, acy - hh); lineTo(acx + hw, acy + hh); lineTo(acx - hw, acy + hh); close()
                     }
                     drawPath(path, ARROW_COLOR)
                 }

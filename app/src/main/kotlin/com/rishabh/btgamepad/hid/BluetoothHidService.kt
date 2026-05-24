@@ -129,7 +129,7 @@ class BluetoothHidService : Service() {
         startForeground(NOTIFICATION_ID, buildNotification("Starting…"))
         registerReceiver(btStateReceiver, IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED))
         // Delay first attempt — BT profile services may not be ready immediately on startup
-        mainHandler.postDelayed({ registerHidProfile() }, 2000)
+        mainHandler.postDelayed({ registerHidProfile() }, 3000)
     }
 
     override fun onBind(intent: Intent?): IBinder = binder
@@ -169,8 +169,9 @@ class BluetoothHidService : Service() {
             override fun onServiceConnected(profile: Int, proxy: BluetoothProfile) {
                 mainHandler.removeCallbacks(registrationTimeoutRunnable)
                 hidDevice = proxy as BluetoothHidDevice
-                // Small delay before registerApp — some BT stacks need it
-                mainHandler.postDelayed({ registerApp() }, 300)
+                // Delay before registerApp — unregister any stale state first,
+                // then wait for BT stack to settle (some devices are slow)
+                mainHandler.postDelayed({ registerApp() }, 800)
             }
             override fun onServiceDisconnected(profile: Int) {
                 hidDevice = null
@@ -189,11 +190,17 @@ class BluetoothHidService : Service() {
     @SuppressLint("MissingPermission")
     private fun registerApp() {
         val hid = hidDevice ?: run { currentState = State.ERROR; return }
-        val qos = BluetoothHidDeviceAppQosSettings(
-            BluetoothHidDeviceAppQosSettings.SERVICE_BEST_EFFORT,
-            800, 9, 0, 11250, BluetoothHidDeviceAppQosSettings.MAX
-        )
-        hid.registerApp(GamepadHidDescriptor.buildSdpSettings(), null, qos, executor, hidCallback)
+        // Unregister any leftover registration from a previous crash/session before re-registering.
+        // This clears stale HID app state that prevents new registration on some devices.
+        try { hid.unregisterApp() } catch (_: Exception) {}
+        mainHandler.postDelayed({
+            val hid2 = hidDevice ?: run { currentState = State.ERROR; return@postDelayed }
+            val qos = BluetoothHidDeviceAppQosSettings(
+                BluetoothHidDeviceAppQosSettings.SERVICE_BEST_EFFORT,
+                800, 9, 0, 11250, BluetoothHidDeviceAppQosSettings.MAX
+            )
+            hid2.registerApp(GamepadHidDescriptor.buildSdpSettings(), null, qos, executor, hidCallback)
+        }, 400)
     }
 
     private fun requestDiscoverable() {
@@ -215,12 +222,13 @@ class BluetoothHidService : Service() {
     fun retry() {
         retryCount = 0
         mainHandler.removeCallbacks(registrationTimeoutRunnable)
-        hidDevice?.unregisterApp()
+        try { hidDevice?.unregisterApp() } catch (_: Exception) {}
         profileListener = null
         val btm = getSystemService(BluetoothManager::class.java)
         btm.adapter?.closeProfileProxy(BluetoothProfile.HID_DEVICE, hidDevice)
         hidDevice = null
-        mainHandler.postDelayed({ registerHidProfile() }, 1000)
+        // Longer wait so the BT stack fully releases the previous registration
+        mainHandler.postDelayed({ registerHidProfile() }, 2500)
     }
 
     private fun buildNotification(text: String): Notification {

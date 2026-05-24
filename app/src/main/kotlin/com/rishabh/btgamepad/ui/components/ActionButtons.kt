@@ -15,6 +15,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.rishabh.btgamepad.ui.LayoutMode
@@ -25,13 +26,14 @@ private val LBL_COLOR = Color(0xFF999999)
 @Composable
 fun ActionButtons(
     layout: LayoutMode,
+    btnSize: Dp = 64.dp,
     onA: (Boolean) -> Unit,
     onB: (Boolean) -> Unit,
     onX: (Boolean) -> Unit,
     onY: (Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val btnSize = 68.dp
+    val gap = btnSize * 0.25f   // gap between X and B — keeps cross compact
 
     val topLabel   = if (layout == LayoutMode.XBOX) "Y" else "△"
     val leftLabel  = if (layout == LayoutMode.XBOX) "X" else "□"
@@ -42,7 +44,7 @@ fun ActionButtons(
         FaceButton(topLabel, btnSize, onY)
         Row(verticalAlignment = Alignment.CenterVertically) {
             FaceButton(leftLabel, btnSize, onX)
-            Spacer(Modifier.size(btnSize))
+            Spacer(Modifier.size(gap))
             FaceButton(rightLabel, btnSize, onB)
         }
         FaceButton(botLabel, btnSize, onA)
@@ -52,7 +54,7 @@ fun ActionButtons(
 @Composable
 private fun FaceButton(
     label: String,
-    size: androidx.compose.ui.unit.Dp,
+    size: Dp,
     onPressedChanged: (Boolean) -> Unit
 ) {
     val haptic = LocalHapticFeedback.current
@@ -73,6 +75,6 @@ private fun FaceButton(
                 }
             }
     ) {
-        Text(label, color = LBL_COLOR, fontSize = 18.sp)
+        Text(label, color = LBL_COLOR, fontSize = (size.value * 0.28f).sp)
     }
 }
