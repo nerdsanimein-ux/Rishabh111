@@ -58,6 +58,7 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
     fun retryConnection()    { hidService?.retry() }
     fun forceWaiting()       { hidService?.forceWaiting() }
     fun makeDiscoverable()   { hidService?.makeDiscoverable() }
+    fun connectToBonded()    { hidService?.connectToBonded() }
     fun toggleSettings()   { showSettings.value = !(showSettings.value ?: false) }
     fun setLayoutMode(m: LayoutMode) { layoutMode.value = m }
 

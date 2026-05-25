@@ -213,12 +213,17 @@ fun GamepadScreen(viewModel: GamepadViewModel) {
                 )
                 Spacer(Modifier.height(14.dp))
                 Button(
-                    onClick = { viewModel.makeDiscoverable() },
+                    onClick = { viewModel.connectToBonded() },
                     colors = ButtonDefaults.buttonColors(containerColor = ACCENT)
-                ) { Text("Make Discoverable Again") }
+                ) { Text("Connect to PC") }
                 Spacer(Modifier.height(4.dp))
-                Text("Tap if your laptop can't find the controller,\nthen tap Allow on the dialog that appears.",
+                Text("Already paired but shows 'Not connected'? Tap this.",
                     color = Color(0xFF607D8B), fontSize = 10.sp)
+                Spacer(Modifier.height(10.dp))
+                Button(
+                    onClick = { viewModel.makeDiscoverable() },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF333333))
+                ) { Text("Make Discoverable Again", fontSize = 12.sp) }
             }
         }
 

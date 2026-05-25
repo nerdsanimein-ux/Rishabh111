@@ -40,10 +40,27 @@ class BluetoothHidService : Service() {
     private val reportBuilder  = HidReportBuilder()
     private val mainHandler    = Handler(Looper.getMainLooper())
     private var profileListener: BluetoothProfile.ServiceListener? = null
-    private var retryStage     = 0   // 0=first try, 1=unregister+retry, 2=full reset, 3=error
-    // True when we advanced to WAITING_FOR_HOST optimistically (without real callback).
-    // Prevents a stale onAppStatusChanged(false) from bouncing us back to IDLE.
+    private var retryStage     = 0
     private var optimisticMode = false
+
+    // When a device finishes bonding (pairing), immediately initiate the HID
+    // connection from our side — Windows won't open the HID profile automatically.
+    private val bondReceiver = object : BroadcastReceiver() {
+        @SuppressLint("MissingPermission")
+        override fun onReceive(context: Context, intent: Intent) {
+            val device: BluetoothDevice? =
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+                    intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java)
+                else
+                    @Suppress("DEPRECATION") intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
+            val bondState = intent.getIntExtra(BluetoothDevice.EXTRA_BOND_STATE, -1)
+            if (bondState == BluetoothDevice.BOND_BONDED && device != null) {
+                mainHandler.postDelayed({
+                    try { hidDevice?.connect(device) } catch (_: Exception) {}
+                }, 1_000)
+            }
+        }
+    }
 
     var onStateChanged: ((State) -> Unit)? = null
     var currentState: State = State.IDLE
@@ -53,6 +70,8 @@ class BluetoothHidService : Service() {
             mainHandler.removeCallbacks(keepDiscoverableRunnable)
             if (value == State.WAITING_FOR_HOST) {
                 mainHandler.postDelayed(keepDiscoverableRunnable, 25_000)
+                // Try to connect HID profile to any already-paired device immediately
+                mainHandler.postDelayed({ connectToBonded() }, 1_500)
             }
             mainHandler.post { onStateChanged?.invoke(value) }
         }
@@ -204,6 +223,7 @@ class BluetoothHidService : Service() {
         super.onCreate()
         startForeground(NOTIFICATION_ID, buildNotification("Starting…"))
         registerReceiver(btStateReceiver, IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED))
+        registerReceiver(bondReceiver,    IntentFilter(BluetoothDevice.ACTION_BOND_STATE_CHANGED))
         // Silent scan mode (no dialog) — makes phone connectable immediately
         mainHandler.postDelayed({ forceScanMode() }, 500)
         mainHandler.postDelayed({ registerHidProfile() }, 1_500)
@@ -216,6 +236,7 @@ class BluetoothHidService : Service() {
         mainHandler.removeCallbacks(optimisticRunnable)
         mainHandler.removeCallbacks(keepDiscoverableRunnable)
         unregisterReceiver(btStateReceiver)
+        unregisterReceiver(bondReceiver)
         try { hidDevice?.unregisterApp() } catch (_: Exception) {}
         profileListener = null
         getSystemService(BluetoothManager::class.java)
@@ -330,6 +351,20 @@ class BluetoothHidService : Service() {
     fun makeDiscoverable() {
         forceScanMode()
         requestDiscoverable()
+    }
+
+    // Attempt to connect the HID profile to every already-bonded device.
+    // On Android's BluetoothHidDevice, the peripheral must initiate the connection —
+    // the host (Windows PC) won't automatically open the HID service channel.
+    @SuppressLint("MissingPermission")
+    fun connectToBonded() {
+        val hid = hidDevice ?: return
+        val adapter = getSystemService(BluetoothManager::class.java).adapter ?: return
+        try {
+            adapter.bondedDevices?.forEach { device ->
+                try { hid.connect(device) } catch (_: Exception) {}
+            }
+        } catch (_: Exception) {}
     }
 
     // User-triggered manual escape: skip waiting for BT callback, go straight to WAITING_FOR_HOST.
