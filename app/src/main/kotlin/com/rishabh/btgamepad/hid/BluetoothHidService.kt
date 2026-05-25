@@ -374,16 +374,20 @@ class BluetoothHidService : Service() {
         requestDiscoverable()
     }
 
-    // Attempt to connect the HID profile to every already-bonded device.
+    // Attempt to connect the HID profile to bonded computers/laptops only.
     // On Android's BluetoothHidDevice, the peripheral must initiate the connection —
     // the host (Windows PC) won't automatically open the HID service channel.
+    // Filtering to COMPUTER class avoids spurious connects to phones/tablets.
     @SuppressLint("MissingPermission")
     fun connectToBonded() {
         val hid = hidDevice ?: return
         val adapter = getSystemService(BluetoothManager::class.java).adapter ?: return
         try {
             adapter.bondedDevices?.forEach { device ->
-                try { hid.connect(device) } catch (_: Exception) {}
+                val major = device.bluetoothClass?.majorDeviceClass ?: -1
+                if (major == android.bluetooth.BluetoothClass.Device.Major.COMPUTER) {
+                    try { hid.connect(device) } catch (_: Exception) {}
+                }
             }
         } catch (_: Exception) {}
     }

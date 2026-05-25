@@ -1,9 +1,9 @@
 package com.rishabh.btgamepad.hid
 
 object HidConstants {
-    // No Report ID in descriptor → pass 0 to sendReport / replyReport
-    const val REPORT_ID: Int = 0
-    const val REPORT_SIZE_BYTES = 8
+    // Report ID 1 as declared in the HID descriptor
+    const val REPORT_ID: Int = 1
+    const val REPORT_SIZE_BYTES = 7
 
     // Button bitmasks — single 16-bit field, bytes 0-1 of report
     const val BTN_A      = 1 shl 0   // 0x0001
@@ -17,8 +17,8 @@ object HidConstants {
     const val BTN_START  = 1 shl 8   // 0x0100
     const val BTN_SELECT = 1 shl 9   // 0x0200
 
-    // Hat switch values — 0-7 valid, any value > 7 = null / centered
-    const val DPAD_CENTERED:   Byte = 0xFF.toByte()   // null state
+    // Hat switch values — 4-bit field, 0-7 valid, 0xF = null / centered
+    const val DPAD_CENTERED:   Byte = 0x0F.toByte()   // null state
     const val DPAD_UP:         Byte = 0
     const val DPAD_UP_RIGHT:   Byte = 1
     const val DPAD_RIGHT:      Byte = 2
@@ -28,6 +28,6 @@ object HidConstants {
     const val DPAD_LEFT:       Byte = 6
     const val DPAD_UP_LEFT:    Byte = 7
 
-    // Signed axes: center = 0, min = -127, max = 127
-    const val AXIS_CENTER: Byte = 0
+    // Unsigned axes: center = 128, min = 0, max = 255
+    const val AXIS_CENTER: Byte = 128.toByte()
 }

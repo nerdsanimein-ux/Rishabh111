@@ -93,7 +93,7 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
     }
     private fun dispatchReport() { hidService?.sendReport(reportBuilder?.toReport() ?: return) }
 
-    // Signed axis: -1.0f → -127, 0f → 0, 1.0f → 127
+    // Unsigned axis: -1.0f → 0, 0.0f → 128, 1.0f → 255
     private fun normalizeAxis(v: Float): Byte =
-        (v.coerceIn(-1f, 1f) * 127f).roundToInt().coerceIn(-127, 127).toByte()
+        (v.coerceIn(-1f, 1f) * 127f + 128f).roundToInt().coerceIn(0, 255).toByte()
 }
