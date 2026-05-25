@@ -61,7 +61,7 @@ class BluetoothHidService : Service() {
      *
      * Stage 2 → total failure.  Show error.
      */
-    private val registrationTimeoutRunnable = Runnable {
+    private val registrationTimeoutRunnable: Runnable = Runnable {
         if (currentState != State.REGISTERING) return@Runnable
         when (retryStage) {
             0 -> {
