@@ -49,43 +49,30 @@ class BluetoothHidService : Service() {
             mainHandler.post { onStateChanged?.invoke(value) }
         }
 
-    // SCAN_MODE_CONNECTABLE_DISCOVERABLE = 23
-    // Forces the BT adapter into discoverable mode without a user dialog.
-    // Called via reflection because setScanMode() is a hidden API.
-    @SuppressLint("MissingPermission")
-    private fun forceDiscoverable() {
-        val adapter = getSystemService(BluetoothManager::class.java).adapter ?: return
-        try {
-            adapter.javaClass
-                .getMethod("setScanMode", Int::class.javaPrimitiveType)
-                .invoke(adapter, 23)
-        } catch (_: Exception) {
-            try {
-                adapter.javaClass
-                    .getMethod("setScanMode", Int::class.javaPrimitiveType, Int::class.javaPrimitiveType)
-                    .invoke(adapter, 23, 300)
-            } catch (_: Exception) {}
+    /**
+     * Optimistic fallback: some OEM BT stacks (Motorola, Xiaomi, Samsung) successfully
+     * register the HID app but silently drop the onAppStatusChanged(true) callback.
+     * If 5 seconds pass after registerApp() returned true and we're still in REGISTERING,
+     * assume registration succeeded and advance to WAITING_FOR_HOST.
+     */
+    private val optimisticRunnable: Runnable = Runnable {
+        if (currentState == State.REGISTERING) {
+            mainHandler.removeCallbacks(registrationTimeoutRunnable)
+            retryStage = 0
+            currentState = State.WAITING_FOR_HOST
+            requestDiscoverable()
         }
-        // Also show the user-facing dialog as a fallback (some ROMs block the hidden API)
-        try {
-            startActivity(
-                Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE).apply {
-                    putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, 300)
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
-            )
-        } catch (_: Exception) {}
     }
 
     /**
-     * Multi-stage retry runnable.
-     *
-     * Stage 0 → registerApp() timed out or returned false. Unregister, wait 500 ms, re-register.
-     * Stage 1 → still failed; full proxy teardown + rebuild from scratch.
-     * Stage 2 → total failure. Show ERROR state.
+     * Multi-stage retry: fires when registration times out completely.
+     * Stage 0 → unregister + 500 ms + re-register.
+     * Stage 1 → full proxy teardown + rebuild.
+     * Stage 2 → ERROR.
      */
     private val registrationTimeoutRunnable: Runnable = Runnable {
         if (currentState != State.REGISTERING) return@Runnable
+        mainHandler.removeCallbacks(optimisticRunnable)
         when (retryStage) {
             0 -> {
                 retryStage = 1
@@ -100,11 +87,12 @@ class BluetoothHidService : Service() {
                             Executor { cmd -> mainHandler.post(cmd) },
                             hidCallback
                         )
-                        if (!ok) {
-                            mainHandler.removeCallbacks(registrationTimeoutRunnable)
-                            mainHandler.postDelayed(registrationTimeoutRunnable, 500)
-                        } else {
+                        if (ok) {
+                            requestDiscoverable()
+                            mainHandler.postDelayed(optimisticRunnable, 5_000)
                             mainHandler.postDelayed(registrationTimeoutRunnable, 20_000)
+                        } else {
+                            mainHandler.postDelayed(registrationTimeoutRunnable, 500)
                         }
                     }, 500)
                 } else {
@@ -124,6 +112,7 @@ class BluetoothHidService : Service() {
     }
 
     private fun fullProxyReset() {
+        mainHandler.removeCallbacks(optimisticRunnable)
         try { hidDevice?.unregisterApp() } catch (_: Exception) {}
         profileListener = null
         getSystemService(BluetoothManager::class.java)
@@ -143,6 +132,7 @@ class BluetoothHidService : Service() {
                 }
                 BluetoothAdapter.STATE_OFF -> {
                     mainHandler.removeCallbacks(registrationTimeoutRunnable)
+                    mainHandler.removeCallbacks(optimisticRunnable)
                     currentState = State.BLUETOOTH_OFF
                 }
             }
@@ -150,19 +140,19 @@ class BluetoothHidService : Service() {
     }
 
     private val hidCallback = object : BluetoothHidDevice.Callback() {
-        @SuppressLint("MissingPermission")
         override fun onAppStatusChanged(pluggedDevice: BluetoothDevice?, registered: Boolean) {
-            // Executor is main-thread, so no mainHandler.post() needed here
+            // Executor posts to main thread, so no mainHandler.post() needed
             if (registered) {
                 mainHandler.removeCallbacks(registrationTimeoutRunnable)
+                mainHandler.removeCallbacks(optimisticRunnable)
                 retryStage = 0
                 currentState = State.WAITING_FOR_HOST
-                // Force discoverable now that registration succeeded
-                forceDiscoverable()
+                requestDiscoverable()
             } else if (currentState != State.REGISTERING) {
-                // Ignore the false from our own unregisterApp() pre-call during REGISTERING.
-                // Only act if registration is lost from another state.
+                // Ignore false fired by our own unregisterApp() pre-call during REGISTERING.
+                // Only act if we lose registration from a connected/waiting state.
                 mainHandler.removeCallbacks(registrationTimeoutRunnable)
+                mainHandler.removeCallbacks(optimisticRunnable)
                 currentState = State.IDLE
             }
         }
@@ -190,11 +180,8 @@ class BluetoothHidService : Service() {
         super.onCreate()
         startForeground(NOTIFICATION_ID, buildNotification("Starting…"))
         registerReceiver(btStateReceiver, IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED))
-        // Force discoverable immediately via hidden API — no user dialog needed.
-        // Do NOT call forceDiscoverable() (which shows a dialog) here because firing
-        // a system UI Activity before the BT service listener binds can interrupt
-        // the profile proxy connection on some manufacturer skins (MIUI, OneUI, etc.).
-        mainHandler.postDelayed({ forceScanModeOnly() }, 500)
+        // Silent scan mode (no dialog) — makes phone connectable immediately
+        mainHandler.postDelayed({ forceScanMode() }, 500)
         mainHandler.postDelayed({ registerHidProfile() }, 1_500)
     }
 
@@ -202,6 +189,7 @@ class BluetoothHidService : Service() {
 
     override fun onDestroy() {
         mainHandler.removeCallbacks(registrationTimeoutRunnable)
+        mainHandler.removeCallbacks(optimisticRunnable)
         unregisterReceiver(btStateReceiver)
         try { hidDevice?.unregisterApp() } catch (_: Exception) {}
         profileListener = null
@@ -210,9 +198,10 @@ class BluetoothHidService : Service() {
         super.onDestroy()
     }
 
-    // Sets scan mode to CONNECTABLE_DISCOVERABLE without showing any Activity/dialog.
+    // Forces adapter to SCAN_MODE_CONNECTABLE_DISCOVERABLE (23) via hidden API.
+    // No user dialog needed. Silently no-ops if the ROM blocks hidden API access.
     @SuppressLint("MissingPermission")
-    private fun forceScanModeOnly() {
+    private fun forceScanMode() {
         val adapter = getSystemService(BluetoothManager::class.java).adapter ?: return
         try {
             adapter.javaClass
@@ -240,11 +229,12 @@ class BluetoothHidService : Service() {
 
         currentState = State.REGISTERING
         mainHandler.removeCallbacks(registrationTimeoutRunnable)
-        mainHandler.postDelayed(registrationTimeoutRunnable, 30_000)  // 30 s for slow manufacturer stacks
+        mainHandler.removeCallbacks(optimisticRunnable)
+        // 30 s outer guard — covers slow manufacturer BT daemons
+        mainHandler.postDelayed(registrationTimeoutRunnable, 30_000)
 
         profileListener = object : BluetoothProfile.ServiceListener {
             override fun onServiceConnected(profile: Int, proxy: BluetoothProfile) {
-                // Reset timeout: give registerApp() a full fresh window from proxy connect
                 mainHandler.removeCallbacks(registrationTimeoutRunnable)
                 mainHandler.postDelayed(registrationTimeoutRunnable, 20_000)
                 hidDevice = proxy as BluetoothHidDevice
@@ -252,19 +242,27 @@ class BluetoothHidService : Service() {
                 val hid = hidDevice ?: run { currentState = State.ERROR; return }
                 val ok = hid.registerApp(
                     GamepadHidDescriptor.buildSdpSettings(deviceName()),
-                    null,   // null QoS = stack default, maximum compatibility
+                    null,   // null QoS = BT stack default, maximum compatibility
                     null,
                     Executor { cmd -> mainHandler.post(cmd) },
                     hidCallback
                 )
-                // If registerApp() returned false the BT stack rejected the call outright.
-                // Trigger the retry runnable immediately instead of waiting 20 s.
-                if (!ok) {
+                if (ok) {
+                    // Start making phone visible NOW — don't wait for the callback.
+                    // This lets the laptop see the phone in Bluetooth scans immediately.
+                    forceScanMode()
+                    requestDiscoverable()
+                    // Optimistic fallback: if onAppStatusChanged(true) never fires
+                    // (OEM BT stack bug), advance to WAITING_FOR_HOST after 5 s.
+                    mainHandler.postDelayed(optimisticRunnable, 5_000)
+                } else {
+                    // registerApp() rejected outright — retry immediately
                     mainHandler.removeCallbacks(registrationTimeoutRunnable)
                     mainHandler.postDelayed(registrationTimeoutRunnable, 500)
                 }
             }
             override fun onServiceDisconnected(profile: Int) {
+                mainHandler.removeCallbacks(optimisticRunnable)
                 try { hidDevice?.unregisterApp() } catch (_: Exception) {}
                 hidDevice = null
                 if (currentState != State.BLUETOOTH_OFF) currentState = State.IDLE
@@ -286,6 +284,18 @@ class BluetoothHidService : Service() {
     } catch (_: Exception) { "Android" }.let { "$it Controller" }
 
     @SuppressLint("MissingPermission")
+    private fun requestDiscoverable() {
+        try {
+            startActivity(
+                Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE).apply {
+                    putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, 300)
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+            )
+        } catch (_: Exception) {}
+    }
+
+    @SuppressLint("MissingPermission")
     fun sendReport(report: ByteArray) {
         hidDevice?.sendReport(connectedHost ?: return, HidConstants.REPORT_ID, report)
     }
@@ -296,12 +306,13 @@ class BluetoothHidService : Service() {
         if (currentState == State.NOT_SUPPORTED) return
         retryStage = 0
         mainHandler.removeCallbacks(registrationTimeoutRunnable)
+        mainHandler.removeCallbacks(optimisticRunnable)
         try { hidDevice?.unregisterApp() } catch (_: Exception) {}
         profileListener = null
         getSystemService(BluetoothManager::class.java)
             .adapter?.closeProfileProxy(BluetoothProfile.HID_DEVICE, hidDevice)
         hidDevice = null
-        mainHandler.postDelayed({ forceScanModeOnly() }, 300)
+        mainHandler.postDelayed({ forceScanMode() }, 300)
         mainHandler.postDelayed({ registerHidProfile() }, 2_500)
     }
 
