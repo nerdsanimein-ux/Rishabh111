@@ -9,6 +9,7 @@ import android.app.Service
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothHidDevice
+import android.bluetooth.BluetoothHidDeviceAppQosSettings
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
 import android.content.BroadcastReceiver
@@ -16,12 +17,14 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.content.pm.ServiceInfo
 import android.os.Binder
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import androidx.core.app.NotificationCompat
+import androidx.core.app.ServiceCompat
 import com.rishabh.btgamepad.MainActivity
 import com.rishabh.btgamepad.R
 import java.util.concurrent.Executor
@@ -125,7 +128,7 @@ class BluetoothHidService : Service() {
                         val hid2 = hidDevice ?: run { fullProxyReset(); return@postDelayed }
                         val ok = hid2.registerApp(
                             GamepadHidDescriptor.buildSdpSettings(deviceName()),
-                            null, null,
+                            null, outQos(),
                             Executor { cmd -> mainHandler.post(cmd) },
                             hidCallback
                         )
@@ -229,20 +232,39 @@ class BluetoothHidService : Service() {
         }
 
         override fun onGetReport(device: BluetoothDevice, type: Byte, id: Byte, bufferSize: Int) {
-            if (id.toInt() == HidConstants.REPORT_ID)
-                hidDevice?.replyReport(device, type, id, reportBuilder.toReport())
-            else
-                hidDevice?.reportError(device, BluetoothHidDevice.ERROR_RSP_INVALID_RPT_ID)
+            val hid = hidDevice ?: return
+            when (type.toInt()) {
+                BluetoothHidDevice.REPORT_TYPE_INPUT -> {
+                    if (id.toInt() == HidConstants.REPORT_ID)
+                        hid.replyReport(device, type, id, reportBuilder.toReport())
+                    else
+                        hid.reportError(device, BluetoothHidDevice.ERROR_RSP_INVALID_RPT_ID)
+                }
+                BluetoothHidDevice.REPORT_TYPE_FEATURE -> {
+                    // No feature reports defined; return empty to avoid Windows dropping connection
+                    hid.replyReport(device, type, id, byteArrayOf())
+                }
+                else -> hid.reportError(device, BluetoothHidDevice.ERROR_RSP_UNSUPPORTED_REQ)
+            }
         }
 
+        // SET_REPORT requires a HANDSHAKE/SUCCESS response, not a report reply
         override fun onSetReport(device: BluetoothDevice, type: Byte, id: Byte, data: ByteArray) {
-            hidDevice?.replyReport(device, type, id, byteArrayOf())
+            hidDevice?.reportError(device, BluetoothHidDevice.ERROR_RSP_SUCCESS)
         }
+
+        // Windows switches between BOOT (0) and REPORT (1) protocol during driver init
+        override fun onSetProtocol(device: BluetoothDevice, protocol: Byte) {}
+
     }
 
     override fun onCreate() {
         super.onCreate()
-        startForeground(NOTIFICATION_ID, buildNotification("Starting…"))
+        // Android 14+ requires foreground service type flag or throws MissingForegroundServiceTypeException
+        ServiceCompat.startForeground(
+            this, NOTIFICATION_ID, buildNotification("Starting…"),
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
+        )
         registerReceiver(btStateReceiver, IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED))
         registerReceiver(bondReceiver,    IntentFilter(BluetoothDevice.ACTION_BOND_STATE_CHANGED))
         // Silent scan mode (no dialog) — makes phone connectable immediately
@@ -309,8 +331,7 @@ class BluetoothHidService : Service() {
                 val hid = hidDevice ?: run { currentState = State.ERROR; return }
                 val ok = hid.registerApp(
                     GamepadHidDescriptor.buildSdpSettings(deviceName()),
-                    null,   // null QoS = BT stack default, maximum compatibility
-                    null,
+                    null, outQos(),
                     Executor { cmd -> mainHandler.post(cmd) },
                     hidCallback
                 )
@@ -374,16 +395,17 @@ class BluetoothHidService : Service() {
         requestDiscoverable()
     }
 
-    // Attempt to connect the HID profile to bonded computers/laptops only.
-    // On Android's BluetoothHidDevice, the peripheral must initiate the connection —
-    // the host (Windows PC) won't automatically open the HID service channel.
-    // Filtering to COMPUTER class avoids spurious connects to phones/tablets.
+    // Connect to bonded computers that are currently in a disconnected HID state.
+    // Uses getDevicesMatchingConnectionStates so we only try devices that actually
+    // have a prior HID association — avoids connecting to phones/tablets.
     @SuppressLint("MissingPermission")
     fun connectToBonded() {
         val hid = hidDevice ?: return
-        val adapter = getSystemService(BluetoothManager::class.java).adapter ?: return
         try {
-            adapter.bondedDevices?.forEach { device ->
+            val candidates = hid.getDevicesMatchingConnectionStates(
+                intArrayOf(BluetoothProfile.STATE_DISCONNECTED)
+            )
+            candidates.forEach { device ->
                 val major = device.bluetoothClass?.majorDeviceClass ?: -1
                 if (major == android.bluetooth.BluetoothClass.Device.Major.COMPUTER) {
                     try { hid.connect(device) } catch (_: Exception) {}
@@ -391,6 +413,12 @@ class BluetoothHidService : Service() {
             }
         } catch (_: Exception) {}
     }
+
+    private fun outQos() = BluetoothHidDeviceAppQosSettings(
+        BluetoothHidDeviceAppQosSettings.SERVICE_BEST_EFFORT,
+        800, 9, 0, 11_250,
+        BluetoothHidDeviceAppQosSettings.MAX
+    )
 
     // User-triggered manual escape: skip waiting for BT callback, go straight to WAITING_FOR_HOST.
     fun forceWaiting() {
