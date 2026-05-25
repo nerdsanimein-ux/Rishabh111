@@ -58,9 +58,15 @@ class BluetoothHidService : Service() {
                     @Suppress("DEPRECATION") intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
             val bondState = intent.getIntExtra(BluetoothDevice.EXTRA_BOND_STATE, -1)
             if (bondState == BluetoothDevice.BOND_BONDED && device != null) {
-                mainHandler.postDelayed({
-                    try { hidDevice?.connect(device) } catch (_: Exception) {}
-                }, 1_000)
+                // Retry at 1 s, 3 s, 7 s — Windows sometimes needs a moment after pairing
+                // before it will accept an incoming HID connection from our side.
+                for (delayMs in listOf(1_000L, 3_000L, 7_000L)) {
+                    mainHandler.postDelayed({
+                        if (currentState != State.CONNECTED) {
+                            try { hidDevice?.connect(device) } catch (_: Exception) {}
+                        }
+                    }, delayMs)
+                }
             }
         }
     }
@@ -81,12 +87,13 @@ class BluetoothHidService : Service() {
             mainHandler.post { onStateChanged?.invoke(value) }
         }
 
-    // Repeatedly forces scan mode while waiting — some phones reset it after a while.
+    // Every 15 s: keep phone visible AND retry connecting to any bonded PC.
     private val keepDiscoverableRunnable: Runnable = object : Runnable {
         override fun run() {
             if (currentState == State.WAITING_FOR_HOST) {
                 forceScanMode()
-                mainHandler.postDelayed(this, 25_000)
+                connectToBonded()
+                mainHandler.postDelayed(this, 15_000)
             }
         }
     }
@@ -219,13 +226,16 @@ class BluetoothHidService : Service() {
                     connectedHost = null
                     currentState = State.WAITING_FOR_HOST
                     // Windows disconnects briefly to install the HID driver, then
-                    // the phone must re-initiate. Retry connect after 2 s.
+                    // the phone must re-initiate. Retry at 2 s, 5 s, and 12 s to
+                    // cover slow driver installs and multi-stage Windows BT handshakes.
                     if (prev != null) {
-                        mainHandler.postDelayed({
-                            if (currentState == State.WAITING_FOR_HOST) {
-                                try { hidDevice?.connect(prev) } catch (_: Exception) {}
-                            }
-                        }, 2_000)
+                        for (delayMs in listOf(2_000L, 5_000L, 12_000L)) {
+                            mainHandler.postDelayed({
+                                if (currentState == State.WAITING_FOR_HOST) {
+                                    try { hidDevice?.connect(prev) } catch (_: Exception) {}
+                                }
+                            }, delayMs)
+                        }
                     }
                 }
             }
@@ -395,21 +405,17 @@ class BluetoothHidService : Service() {
         requestDiscoverable()
     }
 
-    // Connect to bonded computers that are currently in a disconnected HID state.
-    // Uses getDevicesMatchingConnectionStates so we only try devices that actually
-    // have a prior HID association — avoids connecting to phones/tablets.
+    // Try to open the HID connection to every bonded device. The call fails
+    // silently for non-HID-host devices (phones, speakers, etc.) so no filter
+    // is needed. Using all bondedDevices (not getDevicesMatchingConnectionStates)
+    // ensures freshly-paired PCs are included even before their first HID session.
     @SuppressLint("MissingPermission")
     fun connectToBonded() {
         val hid = hidDevice ?: return
+        val adapter = getSystemService(BluetoothManager::class.java).adapter ?: return
         try {
-            val candidates = hid.getDevicesMatchingConnectionStates(
-                intArrayOf(BluetoothProfile.STATE_DISCONNECTED)
-            )
-            candidates.forEach { device ->
-                val major = device.bluetoothClass?.majorDeviceClass ?: -1
-                if (major == android.bluetooth.BluetoothClass.Device.Major.COMPUTER) {
-                    try { hid.connect(device) } catch (_: Exception) {}
-                }
+            adapter.bondedDevices?.forEach { device ->
+                try { hid.connect(device) } catch (_: Exception) {}
             }
         } catch (_: Exception) {}
     }
@@ -429,6 +435,7 @@ class BluetoothHidService : Service() {
         currentState = State.WAITING_FOR_HOST
         forceScanMode()
         requestDiscoverable()
+        mainHandler.postDelayed({ connectToBonded() }, 1_500)
     }
 
     fun retry() {
