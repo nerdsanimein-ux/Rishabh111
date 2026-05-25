@@ -1,0 +1,1 @@
+-keep class com.rishabh.btgamepad.hid.** { *; }
