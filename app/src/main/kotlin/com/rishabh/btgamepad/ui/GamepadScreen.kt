@@ -228,12 +228,19 @@ fun GamepadScreen(viewModel: GamepadViewModel) {
             StateOverlay {
                 Text("HID Registration Failed", color = Color(0xFFFF5252), fontSize = 16.sp)
                 Spacer(Modifier.height(6.dp))
-                Text("Make sure Bluetooth is ON.\nSome devices need a restart of Bluetooth.",
-                    color = Color(0xFF90A4AE), fontSize = 12.sp)
+                Text(
+                    "Fix: Turn Bluetooth OFF → ON, then press Retry.\n\n" +
+                    "If it keeps failing: force-stop this app in Settings, then reopen it.",
+                    color = Color(0xFF90A4AE), fontSize = 12.sp
+                )
                 Spacer(Modifier.height(12.dp))
                 Button(onClick = { viewModel.retryConnection() },
                     colors = ButtonDefaults.buttonColors(containerColor = ACCENT)
                 ) { Text("Retry") }
+                Spacer(Modifier.height(6.dp))
+                Button(onClick = { viewModel.openBluetoothSettings(context) },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF333333))
+                ) { Text("Open Bluetooth Settings", fontSize = 11.sp) }
             }
         }
 
