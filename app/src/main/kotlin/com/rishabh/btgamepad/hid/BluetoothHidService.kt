@@ -24,7 +24,7 @@ import android.os.Looper
 import androidx.core.app.NotificationCompat
 import com.rishabh.btgamepad.MainActivity
 import com.rishabh.btgamepad.R
-import java.util.concurrent.Executors
+import java.util.concurrent.Executor
 
 class BluetoothHidService : Service() {
 
@@ -73,7 +73,7 @@ class BluetoothHidService : Service() {
                         hid2.registerApp(
                             GamepadHidDescriptor.buildSdpSettings(deviceName()),
                             null, null,
-                            Executors.newCachedThreadPool(),
+                            Executor { cmd -> mainHandler.post(cmd) },
                             hidCallback
                         )
                         mainHandler.postDelayed(registrationTimeoutRunnable, 12_000)
@@ -196,15 +196,6 @@ class BluetoothHidService : Service() {
             ?: run { currentState = State.ERROR; return }
         if (!adapter.isEnabled) { currentState = State.BLUETOOTH_OFF; return }
 
-        // Check if this device's Bluetooth hardware supports the HID Device (peripheral) role.
-        // Not all phones support it — if not, show a clear error instead of a timeout loop.
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            if (!adapter.isProfileSupported(BluetoothProfile.HID_DEVICE)) {
-                currentState = State.NOT_SUPPORTED
-                return
-            }
-        }
-
         currentState = State.REGISTERING
         // 15 s covers both proxy connection + app registration
         mainHandler.removeCallbacks(registrationTimeoutRunnable)
@@ -228,7 +219,7 @@ class BluetoothHidService : Service() {
                     GamepadHidDescriptor.buildSdpSettings(deviceName()),
                     null,   // null QoS = stack default, maximum device compatibility
                     null,
-                    Executors.newCachedThreadPool(),
+                    Executor { cmd -> mainHandler.post(cmd) },
                     hidCallback
                 )
             }
