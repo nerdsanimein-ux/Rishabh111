@@ -49,8 +49,23 @@ class BluetoothHidService : Service() {
     var currentState: State = State.IDLE
         private set(value) {
             field = value
+            // Start/stop the discoverable heartbeat based on state
+            mainHandler.removeCallbacks(keepDiscoverableRunnable)
+            if (value == State.WAITING_FOR_HOST) {
+                mainHandler.postDelayed(keepDiscoverableRunnable, 25_000)
+            }
             mainHandler.post { onStateChanged?.invoke(value) }
         }
+
+    // Repeatedly forces scan mode while waiting — some phones reset it after a while.
+    private val keepDiscoverableRunnable: Runnable = object : Runnable {
+        override fun run() {
+            if (currentState == State.WAITING_FOR_HOST) {
+                forceScanMode()
+                mainHandler.postDelayed(this, 25_000)
+            }
+        }
+    }
 
     /**
      * Optimistic fallback: some OEM BT stacks (Motorola, Xiaomi, Samsung) successfully
@@ -199,6 +214,7 @@ class BluetoothHidService : Service() {
     override fun onDestroy() {
         mainHandler.removeCallbacks(registrationTimeoutRunnable)
         mainHandler.removeCallbacks(optimisticRunnable)
+        mainHandler.removeCallbacks(keepDiscoverableRunnable)
         unregisterReceiver(btStateReceiver)
         try { hidDevice?.unregisterApp() } catch (_: Exception) {}
         profileListener = null
@@ -310,6 +326,11 @@ class BluetoothHidService : Service() {
     }
 
     fun getReportBuilder(): HidReportBuilder = reportBuilder
+
+    fun makeDiscoverable() {
+        forceScanMode()
+        requestDiscoverable()
+    }
 
     // User-triggered manual escape: skip waiting for BT callback, go straight to WAITING_FOR_HOST.
     fun forceWaiting() {

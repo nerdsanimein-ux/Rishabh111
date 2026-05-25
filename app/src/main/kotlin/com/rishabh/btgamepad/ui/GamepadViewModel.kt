@@ -1,6 +1,8 @@
 package com.rishabh.btgamepad.ui
 
+import android.annotation.SuppressLint
 import android.app.Application
+import android.bluetooth.BluetoothManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -22,6 +24,13 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
     val layoutMode       = MutableLiveData(LayoutMode.XBOX)
     val showSettings     = MutableLiveData(false)
     val permissionDenied = MutableLiveData(false)
+
+    @SuppressLint("MissingPermission")
+    val controllerName: String get() = try {
+        val name = getApplication<Application>()
+            .getSystemService(BluetoothManager::class.java)?.adapter?.name?.takeIf { it.isNotBlank() } ?: "Android"
+        "$name Controller"
+    } catch (_: Exception) { "Android Controller" }
 
     private var hidService: BluetoothHidService? = null
     private var reportBuilder: HidReportBuilder? = null
@@ -46,8 +55,9 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
 
     fun onPermissionDenied() { permissionDenied.value = true }
 
-    fun retryConnection()  { hidService?.retry() }
-    fun forceWaiting()     { hidService?.forceWaiting() }
+    fun retryConnection()    { hidService?.retry() }
+    fun forceWaiting()       { hidService?.forceWaiting() }
+    fun makeDiscoverable()   { hidService?.makeDiscoverable() }
     fun toggleSettings()   { showSettings.value = !(showSettings.value ?: false) }
     fun setLayoutMode(m: LayoutMode) { layoutMode.value = m }
 

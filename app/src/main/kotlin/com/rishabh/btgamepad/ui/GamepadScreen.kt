@@ -201,6 +201,27 @@ fun GamepadScreen(viewModel: GamepadViewModel) {
         }
 
         // ── Overlays ─────────────────────────────────────────────────────────
+        if (state == BluetoothHidService.State.WAITING_FOR_HOST) {
+            StateOverlay {
+                Text("Ready! Waiting for PC to connect", color = Color(0xFFFFD600), fontSize = 16.sp)
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "On your laptop / PC:\n" +
+                    "Settings → Bluetooth → Add Device\n" +
+                    "→ Look for  \"${viewModel.controllerName}\"",
+                    color = Color(0xFF90A4AE), fontSize = 13.sp
+                )
+                Spacer(Modifier.height(14.dp))
+                Button(
+                    onClick = { viewModel.makeDiscoverable() },
+                    colors = ButtonDefaults.buttonColors(containerColor = ACCENT)
+                ) { Text("Make Discoverable Again") }
+                Spacer(Modifier.height(4.dp))
+                Text("Tap if your laptop can't find the controller,\nthen tap Allow on the dialog that appears.",
+                    color = Color(0xFF607D8B), fontSize = 10.sp)
+            }
+        }
+
         if (state == BluetoothHidService.State.REGISTERING) {
             StateOverlay {
                 Text("Setting up Bluetooth controller…", color = Color(0xFF40C4FF), fontSize = 16.sp)
