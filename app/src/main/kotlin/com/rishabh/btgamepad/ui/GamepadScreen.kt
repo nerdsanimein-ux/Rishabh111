@@ -201,6 +201,25 @@ fun GamepadScreen(viewModel: GamepadViewModel) {
         }
 
         // ── Overlays ─────────────────────────────────────────────────────────
+        if (state == BluetoothHidService.State.REGISTERING) {
+            StateOverlay {
+                Text("Setting up Bluetooth controller…", color = Color(0xFF40C4FF), fontSize = 16.sp)
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "If a dialog appears, tap Allow.\nUsually takes 3–10 seconds.",
+                    color = Color(0xFF90A4AE), fontSize = 12.sp
+                )
+                Spacer(Modifier.height(14.dp))
+                Button(
+                    onClick = { viewModel.forceWaiting() },
+                    colors = ButtonDefaults.buttonColors(containerColor = ACCENT)
+                ) { Text("Force Connect") }
+                Spacer(Modifier.height(4.dp))
+                Text("Use this if the status stays blue for over 10 s",
+                    color = Color(0xFF607D8B), fontSize = 10.sp)
+            }
+        }
+
         if (state == BluetoothHidService.State.BLUETOOTH_OFF) {
             StateOverlay {
                 Text("Bluetooth is OFF", color = Color(0xFFFF5252), fontSize = 18.sp)

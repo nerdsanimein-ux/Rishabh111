@@ -47,6 +47,7 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
     fun onPermissionDenied() { permissionDenied.value = true }
 
     fun retryConnection()  { hidService?.retry() }
+    fun forceWaiting()     { hidService?.forceWaiting() }
     fun toggleSettings()   { showSettings.value = !(showSettings.value ?: false) }
     fun setLayoutMode(m: LayoutMode) { layoutMode.value = m }
 

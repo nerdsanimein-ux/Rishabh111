@@ -41,6 +41,9 @@ class BluetoothHidService : Service() {
     private val mainHandler    = Handler(Looper.getMainLooper())
     private var profileListener: BluetoothProfile.ServiceListener? = null
     private var retryStage     = 0   // 0=first try, 1=unregister+retry, 2=full reset, 3=error
+    // True when we advanced to WAITING_FOR_HOST optimistically (without real callback).
+    // Prevents a stale onAppStatusChanged(false) from bouncing us back to IDLE.
+    private var optimisticMode = false
 
     var onStateChanged: ((State) -> Unit)? = null
     var currentState: State = State.IDLE
@@ -59,6 +62,7 @@ class BluetoothHidService : Service() {
         if (currentState == State.REGISTERING) {
             mainHandler.removeCallbacks(registrationTimeoutRunnable)
             retryStage = 0
+            optimisticMode = true
             currentState = State.WAITING_FOR_HOST
             requestDiscoverable()
         }
@@ -112,6 +116,7 @@ class BluetoothHidService : Service() {
     }
 
     private fun fullProxyReset() {
+        optimisticMode = false
         mainHandler.removeCallbacks(optimisticRunnable)
         try { hidDevice?.unregisterApp() } catch (_: Exception) {}
         profileListener = null
@@ -145,16 +150,20 @@ class BluetoothHidService : Service() {
             if (registered) {
                 mainHandler.removeCallbacks(registrationTimeoutRunnable)
                 mainHandler.removeCallbacks(optimisticRunnable)
+                optimisticMode = false
                 retryStage = 0
                 currentState = State.WAITING_FOR_HOST
                 requestDiscoverable()
-            } else if (currentState != State.REGISTERING) {
-                // Ignore false fired by our own unregisterApp() pre-call during REGISTERING.
-                // Only act if we lose registration from a connected/waiting state.
+            } else if (currentState == State.REGISTERING) {
+                // Ignore false fired by our own unregisterApp() pre-call. Don't act.
+            } else if (!optimisticMode) {
+                // Genuine registration loss from WAITING_FOR_HOST/CONNECTED — reset.
                 mainHandler.removeCallbacks(registrationTimeoutRunnable)
                 mainHandler.removeCallbacks(optimisticRunnable)
                 currentState = State.IDLE
             }
+            // If optimisticMode=true and false fires: stale cleanup callback from the
+            // BT stack. Stay in WAITING_FOR_HOST — we are registered, just not confirmed.
         }
 
         override fun onConnectionStateChanged(device: BluetoothDevice, state: Int) {
@@ -302,8 +311,20 @@ class BluetoothHidService : Service() {
 
     fun getReportBuilder(): HidReportBuilder = reportBuilder
 
+    // User-triggered manual escape: skip waiting for BT callback, go straight to WAITING_FOR_HOST.
+    fun forceWaiting() {
+        mainHandler.removeCallbacks(registrationTimeoutRunnable)
+        mainHandler.removeCallbacks(optimisticRunnable)
+        retryStage = 0
+        optimisticMode = true
+        currentState = State.WAITING_FOR_HOST
+        forceScanMode()
+        requestDiscoverable()
+    }
+
     fun retry() {
         if (currentState == State.NOT_SUPPORTED) return
+        optimisticMode = false
         retryStage = 0
         mainHandler.removeCallbacks(registrationTimeoutRunnable)
         mainHandler.removeCallbacks(optimisticRunnable)
