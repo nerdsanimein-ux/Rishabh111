@@ -25,7 +25,7 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
     val showSettings     = MutableLiveData(false)
     val permissionDenied = MutableLiveData(false)
 
-    @SuppressLint("MissingPermission")
+    @get:SuppressLint("MissingPermission")
     val controllerName: String get() = try {
         val name = getApplication<Application>()
             .getSystemService(BluetoothManager::class.java)?.adapter?.name?.takeIf { it.isNotBlank() } ?: "Android"
