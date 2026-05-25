@@ -244,6 +244,20 @@ fun GamepadScreen(viewModel: GamepadViewModel) {
             }
         }
 
+        if (state == BluetoothHidService.State.NOT_SUPPORTED) {
+            StateOverlay {
+                Text("Device Not Supported", color = Color(0xFFFF5252), fontSize = 16.sp)
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "Your phone's Bluetooth hardware does not support\n" +
+                    "HID Device (peripheral) mode.\n\n" +
+                    "This is a hardware limitation — not all Android phones\n" +
+                    "support acting as a Bluetooth controller.",
+                    color = Color(0xFF90A4AE), fontSize = 12.sp
+                )
+            }
+        }
+
         if (showSettings) {
             SettingsOverlay(layout, viewModel::setLayoutMode, viewModel::toggleSettings)
         }
@@ -363,7 +377,8 @@ private fun statusColor(state: BluetoothHidService.State) = when (state) {
     BluetoothHidService.State.CONNECTED        -> Color(0xFF00E676)
     BluetoothHidService.State.WAITING_FOR_HOST -> Color(0xFFFFD600)
     BluetoothHidService.State.BLUETOOTH_OFF,
-    BluetoothHidService.State.ERROR            -> Color(0xFFFF5252)
+    BluetoothHidService.State.ERROR,
+    BluetoothHidService.State.NOT_SUPPORTED    -> Color(0xFFFF5252)
     BluetoothHidService.State.REGISTERING      -> Color(0xFF40C4FF)
     else                                       -> Color(0xFF444444)
 }
