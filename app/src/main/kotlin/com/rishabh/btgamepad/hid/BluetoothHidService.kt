@@ -70,8 +70,10 @@ class BluetoothHidService : Service() {
             mainHandler.removeCallbacks(keepDiscoverableRunnable)
             if (value == State.WAITING_FOR_HOST) {
                 mainHandler.postDelayed(keepDiscoverableRunnable, 25_000)
-                // Try to connect HID profile to any already-paired device immediately
-                mainHandler.postDelayed({ connectToBonded() }, 1_500)
+                // NOTE: do NOT call connectToBonded() here — it would loop every
+                // time CONNECTED→DISCONNECTED→WAITING_FOR_HOST fires.
+                // connectToBonded() is called once from forceWaiting() / button,
+                // and auto-reconnect is handled in onConnectionStateChanged.
             }
             mainHandler.post { onStateChanged?.invoke(value) }
         }
@@ -99,6 +101,8 @@ class BluetoothHidService : Service() {
             optimisticMode = true
             currentState = State.WAITING_FOR_HOST
             requestDiscoverable()
+            // First-time connect attempt to any already-paired PC
+            mainHandler.postDelayed({ connectToBonded() }, 1_500)
         }
     }
 
@@ -188,6 +192,7 @@ class BluetoothHidService : Service() {
                 retryStage = 0
                 currentState = State.WAITING_FOR_HOST
                 requestDiscoverable()
+                mainHandler.postDelayed({ connectToBonded() }, 1_500)
             } else if (currentState == State.REGISTERING) {
                 // Ignore false fired by our own unregisterApp() pre-call. Don't act.
             } else if (!optimisticMode) {
@@ -202,8 +207,24 @@ class BluetoothHidService : Service() {
 
         override fun onConnectionStateChanged(device: BluetoothDevice, state: Int) {
             when (state) {
-                BluetoothProfile.STATE_CONNECTED    -> { connectedHost = device; currentState = State.CONNECTED }
-                BluetoothProfile.STATE_DISCONNECTED -> { connectedHost = null;   currentState = State.WAITING_FOR_HOST }
+                BluetoothProfile.STATE_CONNECTED -> {
+                    connectedHost = device
+                    currentState = State.CONNECTED
+                }
+                BluetoothProfile.STATE_DISCONNECTED -> {
+                    val prev = connectedHost  // capture before clearing
+                    connectedHost = null
+                    currentState = State.WAITING_FOR_HOST
+                    // Windows disconnects briefly to install the HID driver, then
+                    // the phone must re-initiate. Retry connect after 2 s.
+                    if (prev != null) {
+                        mainHandler.postDelayed({
+                            if (currentState == State.WAITING_FOR_HOST) {
+                                try { hidDevice?.connect(prev) } catch (_: Exception) {}
+                            }
+                        }, 2_000)
+                    }
+                }
             }
         }
 
