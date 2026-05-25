@@ -233,7 +233,7 @@ class BluetoothHidService : Service() {
 
         override fun onGetReport(device: BluetoothDevice, type: Byte, id: Byte, bufferSize: Int) {
             val hid = hidDevice ?: return
-            when (type.toInt()) {
+            when (type) {
                 BluetoothHidDevice.REPORT_TYPE_INPUT -> {
                     if (id.toInt() == HidConstants.REPORT_ID)
                         hid.replyReport(device, type, id, reportBuilder.toReport())
